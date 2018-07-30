@@ -169,7 +169,8 @@ int main(int argc, char *argv[])
 	TIME_ST();
 
 	for (s = 0; s < STEPS; s++) {
-
+clock_t start,end;
+start = clock();
         bounce_send_init(X,
 			 Y,
 			 Z,
@@ -190,7 +191,10 @@ int main(int argc, char *argv[])
 			 temp_lu_send, 
 			 temp_rd_send, 
 			 temp_ru_send);
+end = clock();
+MLOG("RANK %d : STEP %d : bounce_send_init : %d\n",myrank,s,end-start);
 
+start = clock();
         bounce_communicate(mycomm, 
 		           dims, 
 			   coords, 
@@ -216,11 +220,17 @@ int main(int argc, char *argv[])
 			   temp_ld, 
 			   temp_ru, 
 			   temp_rd);
+end = clock();
+MLOG("RANK %d : STEP %d : bounce_communicate : %d\n",myrank,s,end-start);
 
+start = clock();
 	for(i = 0; i < count; i++) {
 		MPI_Wait(&req[i], &sta[i]);
 	}
+end = clock();
+MLOG("RANK %d : STEP %d : MPI_Wait : %d\n",myrank,s,end-start);
 
+start = clock();
         bounce_update(X,
 		      Y,
 		      Z,
@@ -241,10 +251,18 @@ int main(int argc, char *argv[])
 		      temp_lu, 
 		      temp_rd, 
 		      temp_ru);
+end = clock();
+MLOG("RANK %d : STEP %d : bounce_update : %d\n",myrank,s,end-start);
 
+start = clock();
 	stream(nodes, walls, flags, Xst, Xed, Yst, Yed, Z, current, other);
+end = clock();
+MLOG("RANK %d : STEP %d : stream : %d\n",myrank,s,end-start);
 
+start = clock();
 	collide(nodes, flags, Xst, Xed, Yst, Yed, Z, current);
+end = clock();
+MLOG("RANK %d : STEP %d : collide : %d\n",myrank,s,end-start);
 
 	other = current;
 	current = (current+1)%2;
