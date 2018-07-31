@@ -167,10 +167,14 @@ int main(int argc, char *argv[])
 	 * Main Calculation section
 	 * ---------------------------------------------------*/
 	TIME_ST();
-
+unsigned long test1,test2;
+test1 = rpcc();
+sleep(10);
+test2 = rpcc();
+MLOG("test for sleep(10): %lf\n",(test2-test1)/1450000000);
 	for (s = 0; s < STEPS; s++) {
-clock_t start,end;
-start = clock();
+unsigned long start,end;
+start = rpcc();
         bounce_send_init(X,
 			 Y,
 			 Z,
@@ -191,10 +195,10 @@ start = clock();
 			 temp_lu_send, 
 			 temp_rd_send, 
 			 temp_ru_send);
-end = clock();
-MLOG("RANK %d : STEP %d : bounce_send_init : %d\n",myrank,s,end-start);
+end = rpcc();
+MLOG("RANK %d : STEP %d : bounce_send_init : %lf\n",myrank,s,(end-start)/1450000000);
 
-start = clock();
+start = rpcc();
         bounce_communicate(mycomm, 
 		           dims, 
 			   coords, 
@@ -220,17 +224,17 @@ start = clock();
 			   temp_ld, 
 			   temp_ru, 
 			   temp_rd);
-end = clock();
-MLOG("RANK %d : STEP %d : bounce_communicate : %d\n",myrank,s,end-start);
+end = rpcc();
+MLOG("RANK %d : STEP %d : bounce_communicate : %lf\n",myrank,s,(end-start)/1450000000);
 
-start = clock();
+start = rpcc();
 	for(i = 0; i < count; i++) {
 		MPI_Wait(&req[i], &sta[i]);
 	}
-end = clock();
-MLOG("RANK %d : STEP %d : MPI_Wait : %d\n",myrank,s,end-start);
+end = rpcc();
+MLOG("RANK %d : STEP %d : MPI_Wait : %lf\n",myrank,s,(end-start)/1450000000);
 
-start = clock();
+start = rpcc();
         bounce_update(X,
 		      Y,
 		      Z,
@@ -251,18 +255,18 @@ start = clock();
 		      temp_lu, 
 		      temp_rd, 
 		      temp_ru);
-end = clock();
-MLOG("RANK %d : STEP %d : bounce_update : %d\n",myrank,s,end-start);
+end = rpcc();
+MLOG("RANK %d : STEP %d : bounce_update : %lf\n",myrank,s,(end-start)/1450000000);
 
-start = clock();
+start = rpcc();
 	stream(nodes, walls, flags, Xst, Xed, Yst, Yed, Z, current, other);
-end = clock();
-MLOG("RANK %d : STEP %d : stream : %d\n",myrank,s,end-start);
+end = rpcc();
+MLOG("RANK %d : STEP %d : stream : %lf\n",myrank,s,(end-start)/1450000000);
 
-start = clock();
+start = rpcc();
 	collide(nodes, flags, Xst, Xed, Yst, Yed, Z, current);
-end = clock();
-MLOG("RANK %d : STEP %d : collide : %d\n",myrank,s,end-start);
+end = rpcc();
+MLOG("RANK %d : STEP %d : collide : %lf\n",myrank,s,(end-start)/1450000000);
 
 	other = current;
 	current = (current+1)%2;
