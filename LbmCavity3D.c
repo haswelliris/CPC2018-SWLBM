@@ -167,14 +167,16 @@ int main(int argc, char *argv[])
 	 * Main Calculation section
 	 * ---------------------------------------------------*/
 	TIME_ST();
-unsigned long test1,test2;
-test1 = rpcc();
-sleep(10);
-test2 = rpcc();
-MLOG("test for sleep(10): %lf\n",(test2-test1)/1450000000.0);
+
+// 最终提交的时候请删除所有计时代码
+float hotpots[110][10];
+// FINAL SUBMIT please delete above
 	for (s = 0; s < STEPS; s++) {
+// 每个函数
+int func_cnt = 0;
 unsigned long start,end;
 start = rpcc();
+// 开始计时
         bounce_send_init(X,
 			 Y,
 			 Z,
@@ -195,9 +197,13 @@ start = rpcc();
 			 temp_lu_send, 
 			 temp_rd_send, 
 			 temp_ru_send);
+// 结束计时
 end = rpcc();
-MLOG("RANK %d : STEP %d : bounce_send_init : %lf\n",myrank,s,(end-start)/1450000000.0);
+hotpots[s][func_cnt] = (end-start)/1450000000.0;
+func_cnt++;
+//OLOG(myrank," STEP %d : bounce_send_init : %lf\n", s,(end-start)/1450000000.0);
 
+// 下一个函数
 start = rpcc();
         bounce_communicate(mycomm, 
 		           dims, 
@@ -225,15 +231,21 @@ start = rpcc();
 			   temp_ru, 
 			   temp_rd);
 end = rpcc();
-MLOG("RANK %d : STEP %d : bounce_communicate : %lf\n",myrank,s,(end-start)/1450000000.0);
+hotpots[s][func_cnt] = (end-start)/1450000000.0;
+func_cnt++;
+//OLOG(myrank," STEP %d : bounce_communicate : %lf\n", s,(end-start)/1450000000.0);
 
+// 下一个
 start = rpcc();
 	for(i = 0; i < count; i++) {
 		MPI_Wait(&req[i], &sta[i]);
 	}
 end = rpcc();
-MLOG("RANK %d : STEP %d : MPI_Wait : %lf\n",myrank,s,(end-start)/1450000000.0);
+hotpots[s][func_cnt] = (end-start)/1450000000.0;
+func_cnt++;
+//OLOG(myrank," STEP %d : MPI_Wait : %lf\n", s,(end-start)/1450000000.0);
 
+//下一个
 start = rpcc();
         bounce_update(X,
 		      Y,
@@ -256,17 +268,25 @@ start = rpcc();
 		      temp_rd, 
 		      temp_ru);
 end = rpcc();
-MLOG("RANK %d : STEP %d : bounce_update : %lf\n",myrank,s,(end-start)/1450000000.0);
+hotpots[s][func_cnt] = (end-start)/1450000000.0;
+func_cnt++;
+//OLOG(myrank," STEP %d : bounce_update : %lf\n", s,(end-start)/1450000000.0);
 
+// 下一个
 start = rpcc();
 	stream(nodes, walls, flags, Xst, Xed, Yst, Yed, Z, current, other);
 end = rpcc();
-MLOG("RANK %d : STEP %d : stream : %lf\n",myrank,s,(end-start)/1450000000.0);
+hotpots[s][func_cnt] = (end-start)/1450000000.0;
+func_cnt++;
+//OLOG(myrank," STEP %d : stream : %lf\n", s,(end-start)/1450000000.0);
 
+//最后一个？
 start = rpcc();
 	collide(nodes, flags, Xst, Xed, Yst, Yed, Z, current);
 end = rpcc();
-MLOG("RANK %d : STEP %d : collide : %lf\n",myrank,s,(end-start)/1450000000.0);
+hotpots[s][func_cnt] = (end-start)/1450000000.0;
+func_cnt++;
+//OLOG(myrank," STEP %d : collide : %lf\n", s,(end-start)/1450000000.0);
 
 	other = current;
 	current = (current+1)%2;
@@ -277,6 +297,34 @@ MLOG("RANK %d : STEP %d : collide : %lf\n",myrank,s,(end-start)/1450000000.0);
 	}
 	
 	}
+// 热点计时输出部分
+char temp[100];
+temp[0] = (myrank/10)%10 +48;
+temp[1] = myrank%10 +48;
+temp[2] = '.';
+temp[3] = 'c';
+temp[4] = 's';
+temp[5] = 'v';
+temp[6] = '\0';
+FILE * fid = fopen(temp,"w");
+if(fid == NULL)
+{
+	printf("写出文件失败！\n");
+	return;
+}
+int iii;
+int jjj;
+for(jjj=0;jjj<STEPS;jjj++)
+for(iii = 0; iii < 6; iii ++ )
+{
+	if(iii==5) {
+	fprintf(fid,"%f\n",hotpots[jjj][iii]);
+	} else {
+	fprintf(fid,"%f,",hotpots[jjj][iii]);
+	}
+}
+fclose(fid);
+// FIANL SUBMIT please delete above
 
 	TIME_ED();
 	/*-----------------------------*
