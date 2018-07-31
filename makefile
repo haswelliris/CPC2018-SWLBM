@@ -3,24 +3,29 @@ USER = $(shell whoami)
 CC = sw5cc
 LD = mpicc 
 
-CFLAGS =  -O3 -host -I/usr/sw-mpp/mpi2/include/ -lm 
+CFLAGS =  -O3 -host -I/usr/sw-mpp/mpi2/include/ -lm -msimd -OPT:ieee_arith=1 -fno-math-errno
+SCFLAGS = -O3 -slave -msimd -OPT:ieee_arith=1 -lm_slave -fno-math-errno
 
-OBJ = LbmCavity3D.o Collide.o Parallel.o  Stream.o
+COBJ = LbmCavity3D.o Collide.o Parallel.o  Stream.o
+SOBJ = Slave.o
 
 LIB = lib/liblbm.a
 
-$(TARGET): $(OBJ)
-	$(LD) $(OBJ) $(LIB) -o $(TARGET) 
-	rm $(OBJ)
+$(TARGET): $(COBJ) $(SOBJ)
+	$(LD) $(COBJ) $(SOBJ) $(LIB) -o $(TARGET) 
+	rm $(COBJ) $(SOBJ)
 	
-%.o:%.c
+$(COBJ): %.o: %.c
 	$(CC) $(CFLAGS) -c $<
 
+$(SOBJ): %.o: %.c
+	$(CC) $(SCFLAGS) -c $<
+
 run:
-	bsub -I -b -q q_sw_cpc_1 -cgsp 64 -n 16 -np 4  -share_size 6500 -host_stack 500 -J test ./LbmCavity3D $(USER)
+	bsub -I -b -q q_sw_cpc_2 -cgsp 64 -n 16 -np 4  -share_size 6500 -host_stack 500 -J test ./LbmCavity3D $(USER)
 
 #-------------------------------------*
 .PHONY : clean clear
 clean:
-	-rm -rf $(TARGET) $(OBJ) 
+	-rm -rf $(COBJ) $(SOBJ)
 	

@@ -112,6 +112,8 @@ int main(int argc, char *argv[])
 	MLOG("Size                 :  %d x %d x %d\n", X, Y, Z);
         MLOG("Steps                :  %d\n", STEPS);
         MLOG("Number of Process    :  %d\n\n", size);
+
+	OLOG(myrank, "Task: X=[\t%d~\t%d], Y=[\t%d~\t%d]\n\n", Xst, Xed, Yst, Yed);
 	
         /*-----------------------------*
          * Space Allocate
