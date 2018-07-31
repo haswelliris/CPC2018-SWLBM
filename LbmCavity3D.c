@@ -171,7 +171,7 @@ unsigned long test1,test2;
 test1 = rpcc();
 sleep(10);
 test2 = rpcc();
-MLOG("test for sleep(10): %lf\n",(test2-test1)/1450000000);
+MLOG("test for sleep(10): %lf\n",(test2-test1)/1450000000.0);
 	for (s = 0; s < STEPS; s++) {
 unsigned long start,end;
 start = rpcc();
@@ -196,7 +196,7 @@ start = rpcc();
 			 temp_rd_send, 
 			 temp_ru_send);
 end = rpcc();
-MLOG("RANK %d : STEP %d : bounce_send_init : %lf\n",myrank,s,(end-start)/1450000000);
+MLOG("RANK %d : STEP %d : bounce_send_init : %lf\n",myrank,s,(end-start)/1450000000.0);
 
 start = rpcc();
         bounce_communicate(mycomm, 
@@ -225,14 +225,14 @@ start = rpcc();
 			   temp_ru, 
 			   temp_rd);
 end = rpcc();
-MLOG("RANK %d : STEP %d : bounce_communicate : %lf\n",myrank,s,(end-start)/1450000000);
+MLOG("RANK %d : STEP %d : bounce_communicate : %lf\n",myrank,s,(end-start)/1450000000.0);
 
 start = rpcc();
 	for(i = 0; i < count; i++) {
 		MPI_Wait(&req[i], &sta[i]);
 	}
 end = rpcc();
-MLOG("RANK %d : STEP %d : MPI_Wait : %lf\n",myrank,s,(end-start)/1450000000);
+MLOG("RANK %d : STEP %d : MPI_Wait : %lf\n",myrank,s,(end-start)/1450000000.0);
 
 start = rpcc();
         bounce_update(X,
@@ -256,17 +256,17 @@ start = rpcc();
 		      temp_rd, 
 		      temp_ru);
 end = rpcc();
-MLOG("RANK %d : STEP %d : bounce_update : %lf\n",myrank,s,(end-start)/1450000000);
+MLOG("RANK %d : STEP %d : bounce_update : %lf\n",myrank,s,(end-start)/1450000000.0);
 
 start = rpcc();
 	stream(nodes, walls, flags, Xst, Xed, Yst, Yed, Z, current, other);
 end = rpcc();
-MLOG("RANK %d : STEP %d : stream : %lf\n",myrank,s,(end-start)/1450000000);
+MLOG("RANK %d : STEP %d : stream : %lf\n",myrank,s,(end-start)/1450000000.0);
 
 start = rpcc();
 	collide(nodes, flags, Xst, Xed, Yst, Yed, Z, current);
 end = rpcc();
-MLOG("RANK %d : STEP %d : collide : %lf\n",myrank,s,(end-start)/1450000000);
+MLOG("RANK %d : STEP %d : collide : %lf\n",myrank,s,(end-start)/1450000000.0);
 
 	other = current;
 	current = (current+1)%2;
