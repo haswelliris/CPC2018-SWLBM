@@ -11,6 +11,8 @@ SOBJ = Slave.o
 
 LIB = lib/liblbm.a
 
+VPATH = ./header/:./master/:./slave/
+
 $(TARGET): $(COBJ) $(SOBJ)
 	$(LD) $(COBJ) $(SOBJ) $(LIB) -o $(TARGET) 
 	rm $(COBJ) $(SOBJ)

@@ -1,4 +1,6 @@
-#include "Argument.h"
+#include "../header/Config.h"
+#include "../header/Lbm.h"
+#include "../header/Variable.h"
 
 /*------------------------------------
  *      Main Computing Part

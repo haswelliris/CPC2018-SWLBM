@@ -2,7 +2,11 @@
 #include <stdlib.h>
 #include <math.h>
 #include <mpi.h>
-#include "Argument.h"
+
+#include "../header/Config.h"
+#include "../header/Lbm.h"
+#include "../header/Variable.h"
+#include "../header/Log.h"
 
 int main(int argc, char *argv[])                                       
 {                                                                      
@@ -104,6 +108,8 @@ int main(int argc, char *argv[])
     	x_sec = Xed - Xst;
     	y_sec = Yed - Yst;
 	
+    //OLOG(myrank, "Task:\tX=[%d~%d],\tY=[%d~%d]\n", Xst, Xed, Yst, Yed);
+	//Size of range for each MPI process is 250 x 125 x 500
 
 	/*-----------------------------*
          *-----------------------------* 
@@ -112,8 +118,6 @@ int main(int argc, char *argv[])
 	MLOG("Size                 :  %d x %d x %d\n", X, Y, Z);
         MLOG("Steps                :  %d\n", STEPS);
         MLOG("Number of Process    :  %d\n\n", size);
-
-	OLOG(myrank, "Task: X=[\t%d~\t%d], Y=[\t%d~\t%d]\n\n", Xst, Xed, Yst, Yed);
 	
         /*-----------------------------*
          * Space Allocate

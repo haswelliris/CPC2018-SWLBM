@@ -1,4 +1,5 @@
-#include "Argument.h"
+#include "../header/Lbm.h"
+#include "../header/Variable.h"
 
 /*------------------------------------
  *      MPI communication Part
