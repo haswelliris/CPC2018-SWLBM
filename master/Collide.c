@@ -1,8 +1,6 @@
 #include <math.h>
 
-#include "../header/Config.h"
-#include "../header/Lbm.h"
-#include "../header/Variable.h"
+#include "../header/Argument.h"
 /*------------------------------------
  *      Main Computing Part
  *-----------------------------------*/

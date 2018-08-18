@@ -3,10 +3,8 @@
 #include <math.h>
 #include <mpi.h>
 
-#include "../header/Config.h"
-#include "../header/Lbm.h"
-#include "../header/Variable.h"
-#include "../header/Log.h"
+#include "../header/Argument.h"
+#include "../header/Array.h"
 
 int main(int argc, char *argv[])                                       
 {                                                                      
@@ -61,6 +59,7 @@ int main(int argc, char *argv[])
          * ----------------------*/
 
     	setParameter();
+		STEPS = 2;
 	
 	/*---------------------------*
 	 * MPI Init
@@ -174,6 +173,21 @@ int main(int argc, char *argv[])
 	 * ---------------------------------------------------*/
 	TIME_ST();
 
+	/*__iterate__(i,0,x_sec+2) \
+	__iterate__(j,0,y_sec+2) \
+	__iterate__(k,0,Z) \
+	__iterate__(l,0,19) {
+		if(nodes[current][i][j][k][l] == 3455333.53353)
+			MLOG("------------\n");
+	}*/
+	/*for (i = 0; i < x_sec+2; i++)
+		for (j = 0; j < y_sec+2; j++)
+			if (i == 0 || i == x_sec+1 || j == 0 || j == y_sec+1)
+				for (k = 0; k < Z; k++)
+					for (l = 0; l < 19; l++)
+						if (nodes[current][i][j][k][l] == 6.66)
+							MLOG("nothing");*/
+
 	for (s = 0; s < STEPS; s++) {
 
         bounce_send_init(X,
@@ -223,9 +237,9 @@ int main(int argc, char *argv[])
 			   temp_ru, 
 			   temp_rd);
 
-	for(i = 0; i < count; i++) {
-		MPI_Wait(&req[i], &sta[i]);
-	}
+		for(i = 0; i < count; i++) {
+			MPI_Wait(&req[i], &sta[i]);
+		}
 
         bounce_update(X,
 		      Y,
@@ -248,17 +262,17 @@ int main(int argc, char *argv[])
 		      temp_rd, 
 		      temp_ru);
 
-	stream(nodes, walls, flags, Xst, Xed, Yst, Yed, Z, current, other);
+		stream(nodes, walls, flags, Xst, Xed, Yst, Yed, Z, current, other);
 
-	collide(nodes, flags, Xst, Xed, Yst, Yed, Z, current);
+		collide(nodes, flags, Xst, Xed, Yst, Yed, Z, current);
 
-	other = current;
-	current = (current+1)%2;
+		other = current;
+		current = (current+1)%2;
 
-	if(myrank == 0 && STEPS >= 10 && (s + 1)%(STEPS/10) == 0.0) {
-		n += 1;
-		MLOG("Step >> [%d/%d] Calculation Completed %d%% \n", s + 1, STEPS, n * 10);
-	}
+		if(myrank == 0 && STEPS >= 10 && (s + 1)%(STEPS/10) == 0.0) {
+			n += 1;
+			MLOG("Step >> [%d/%d] Calculation Completed %d%% \n", s + 1, STEPS, n * 10);
+		}
 	
 	}
 
@@ -268,6 +282,96 @@ int main(int argc, char *argv[])
  	 *-----------------------------*/
 
 	MLOG("Step >> Main Steps Done!\n\n");
+
+	/**
+	 *  dump & check
+	 */
+
+	int dump = 0;
+	FILE *outfile, *infile;
+	char fname[100];
+	sprintf(fname, "lbm_steps-%d_dump_rank-%02d.dat", STEPS, myrank);
+
+	if(dump == 1) 
+	{
+		outfile = fopen(fname, "wb");
+		if(outfile == NULL)
+        {
+			if(myrank == 0)
+				MLOG("EMMMM!? cannot write");
+		}
+		else
+		{
+			int i0, i1, i2, i3;
+            for(i0 = 0; i0 < 2; i0++)
+            {
+                for(i1 = 1; i1 < x_sec + 1; i1++)
+                {
+					i2 = 1;
+                    for(i3 = 0; i3 < Z; i3++)
+                    {
+                        fwrite(nodes[i0][i1][i2][i3], sizeof(Real), 1, outfile);
+                    }
+                }
+            }
+            fclose(outfile);
+		}
+	}
+	else
+	{
+		infile = fopen(fname, "rb");
+		if(infile == NULL) {
+			if(myrank == 0)
+				MLOG("Please dump the data first :3");
+		}
+		else
+		{
+			if(myrank != 0)
+			{
+            	Real* dumped = malloc(sizeof(Real) * 2 * (x_sec + 2) * 1 * Z * 1);
+				fread(dumped, sizeof(Real), 2 * (x_sec + 2) * 1 * Z * 1, infile);
+
+				int i0, i1, i2, i3;
+				int iter = 0;
+				for(i0 = 0; i0 < 2; i0++)
+				{
+					for(i1 = 1; i1 < x_sec + 1; i1++)
+					{
+						i2 = 1;
+						for(i3 = 0; i3 < Z; i3++)
+						{
+							if(isnan(dumped[iter]) && isnan(nodes[i0][i1][i2][i3][0]))
+							{
+							}
+							else if(isnan(dumped[iter]))
+							{
+							}
+							else if(isnan(nodes[i0][i1][i2][i3][0]))
+							{
+								OLOG(myrank, "error data at (%d %d %d %d %d)\n", i0, i1, i2, i3, 0);
+								iter = -1;
+								break;
+							}
+							else if(dumped[iter] != nodes[i0][i1][i2][i3][0])
+							{
+								OLOG(myrank, "error data at (%d %d %d %d %d)\n", i0, i1, i2, i3, 0);
+								iter = -1;
+								break;
+							}
+							iter++;
+						}
+						if(iter == -1)
+							break;
+					}
+					if(iter == -1)
+						break;
+				}
+			}
+		}
+	}
+
+	//---------------------------------------------------
+	 
 
 	OUTPUT(X, Y, Z, Xst, Xed, Yst, Yed, s, myrank, size, other, x_sec, y_sec, argv[1], local_image, image, rankinfo, nodes);
 
