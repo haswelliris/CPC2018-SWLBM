@@ -298,7 +298,7 @@ int main(int argc, char *argv[])
 		if(outfile == NULL)
         {
 			if(myrank == 0)
-				MLOG("EMMMM!? cannot write");
+				MLOG("EMMMM!? cannot write\n");
 		}
 		else
 		{
@@ -322,7 +322,7 @@ int main(int argc, char *argv[])
 		infile = fopen(fname, "rb");
 		if(infile == NULL) {
 			if(myrank == 0)
-				MLOG("Please dump the data first :3");
+				MLOG("Please dump the data first :3\n");
 		}
 		else
 		{
