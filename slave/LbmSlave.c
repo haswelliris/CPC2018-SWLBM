@@ -1,10 +1,42 @@
 #include "../header/LbmSlave.h"
 
+#include <slave.h>
+
+#include "dma.h"
+#include "simd.h"
+#include <stdio.h>
+#include <memory.h>
+
+#include "../header/Array.h"
+
+#ifndef __thread_local
+#define __thread_local const //本地IDE美化(__thread_local 是神威从核编译的关键字, 相当于cuda的片上内存)
+#endif
+
+__thread_local int slave_id, core_x, core_y; // 从核id，所在行，所在列
+// 我觉得是7 * 4B + 4B
+__thread_local struct lbm_param param;                 // 28 * (4B / 8B) + 4B
+__thread_local volatile long local_flag[FLAG_SIZE];          // 16 * 8B
+__thread_local volatile long out_flag[FLAG_SIZE];          // 16 * 8B
+__thread_local long slave_flag_to_wait;
+__thread_local volatile unsigned long get_reply, put_reply; // 2 * 8B
+__thread_local volatile unsigned long get_reply_god, put_reply_god; // 2 * 8B
+__thread_local volatile unsigned long get_reply_target, put_reply_target; // 2 * 8B
+__thread_local volatile intv8 bcast_tmp256;                 // 8B
+
+void cpe0_bcast_256(int slave_id, volatile intv8 *bcast_data);
+void standard_wait_flag(int slave_id);
+void standard_write_flag(int slave_id);
+void seq_write_data(void* mpe_data_ptr, void* cpe_data_ptr, int size, int slave_id, int write_flag);
+void async_write_data(void* mpe_data_ptr, void* cpe_data_ptr, int size, int slave_id, int write_flag);
+void std_lbm();
+void insane_lbm();
+
 void cpe_athread_daemon(void *_param)
 {
     int i, j, k;
     // 从核id
-    param = *((struct lbm_init_param *)_param);
+    param = *((struct lbm_param *)_param);
     slave_id = athread_get_id(-1);
     core_x = slave_id % 8;
     core_y = slave_id / 8;
