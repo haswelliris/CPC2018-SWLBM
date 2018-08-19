@@ -188,93 +188,16 @@ int main(int argc, char *argv[])
 						if (nodes[current][i][j][k][l] == 6.66)
 							MLOG("nothing");*/
 
-	for (s = 0; s < STEPS; s++) {
-
-        bounce_send_init(X,
-			 Y,
-			 Z,
-			 Xst, 
-		         Xed, 
-			 Yst, 
-			 Yed, 
-			 x_sec, 
-			 y_sec, 
-			 current, 
-			 other, 
-			 nodes, 
-                         temp_left_send, 
-			 temp_right_send, 
-			 temp_up_send, 
-			 temp_down_send, 
-                         temp_ld_send, 
-			 temp_lu_send, 
-			 temp_rd_send, 
-			 temp_ru_send);
-
-        bounce_communicate(mycomm, 
-		           dims, 
-			   coords, 
-			   x_sec, 
-			   y_sec, 
-			   Z,
-			   &count,
-			   sta,
-			   req,
-			   temp_left_send, 
-			   temp_right_send, 
-			   temp_up_send, 
-			   temp_down_send, 
-			   temp_left, 
-			   temp_right, 
-			   temp_up, 
-			   temp_down,
-			   temp_lu_send, 
-			   temp_ld_send, 
-			   temp_ru_send, 
-			   temp_rd_send, 
-			   temp_lu, 
-			   temp_ld, 
-			   temp_ru, 
-			   temp_rd);
-
-		for(i = 0; i < count; i++) {
-			MPI_Wait(&req[i], &sta[i]);
-		}
-
-        bounce_update(X,
-		      Y,
-		      Z,
-		      Xst, 
-		      Xed, 
-		      Yst, 
-		      Yed, 
-		      myrank,
-		      x_sec, 
-		      y_sec,
-		      other,
-		      nodes,
-                      temp_left, 
-		      temp_right, 
-		      temp_up, 
-		      temp_down,
-                      temp_ld, 
-		      temp_lu, 
-		      temp_rd, 
-		      temp_ru);
-
-		stream(nodes, walls, flags, Xst, Xed, Yst, Yed, Z, current, other);
-
-		collide(nodes, flags, Xst, Xed, Yst, Yed, Z, current);
-
-		other = current;
-		current = (current+1)%2;
-
-		if(myrank == 0 && STEPS >= 10 && (s + 1)%(STEPS/10) == 0.0) {
-			n += 1;
-			MLOG("Step >> [%d/%d] Calculation Completed %d%% \n", s + 1, STEPS, n * 10);
-		}
+	data_init(	myrank, size, &mycomm, 
+		    	dims, coords,
+                Xst, Xed, Yst, Yed, x_sec, y_sec, 
+                nodes, flags, walls,
+                temp_right, temp_left, temp_down, temp_up,
+                temp_right_send, temp_left_send, temp_down_send, temp_up_send,
+                temp_lu, temp_ld, temp_ru, temp_rd,
+                temp_lu_send, temp_ld_send, temp_ru_send, temp_rd_send);
 	
-	}
+	main_iter();
 
 	TIME_ED();
 	/*-----------------------------*
@@ -297,11 +220,11 @@ int main(int argc, char *argv[])
 		outfile = fopen(fname, "wb");
 		if(outfile == NULL)
         {
-			if(myrank == 0)
-				MLOG("EMMMM!? cannot write\n");
+			MLOG("EMMMM!? cannot write\n");
 		}
 		else
 		{
+			MLOG("Writing\n");
 			int i0, i1, i2, i3;
             for(i0 = 0; i0 < 2; i0++)
             {
@@ -321,12 +244,12 @@ int main(int argc, char *argv[])
 	{
 		infile = fopen(fname, "rb");
 		if(infile == NULL) {
-			if(myrank == 0)
-				MLOG("Please dump the data first :3\n");
+			MLOG("Please dump the data first :3\n");
 		}
 		else
 		{
-			if(myrank != 0)
+			MLOG("Checking\n");
+			if(1)
 			{
             	Real* dumped = malloc(sizeof(Real) * 2 * (x_sec + 2) * 1 * Z * 1);
 				fread(dumped, sizeof(Real), 2 * (x_sec + 2) * 1 * Z * 1, infile);
@@ -373,7 +296,7 @@ int main(int argc, char *argv[])
 	//---------------------------------------------------
 	 
 
-	OUTPUT(X, Y, Z, Xst, Xed, Yst, Yed, s, myrank, size, other, x_sec, y_sec, argv[1], local_image, image, rankinfo, nodes);
+	//OUTPUT(X, Y, Z, Xst, Xed, Yst, Yed, s, myrank, size, other, x_sec, y_sec, argv[1], local_image, image, rankinfo, nodes);
 
 	arrayFree2DF(image);
 	arrayFree2DI(rankinfo);
