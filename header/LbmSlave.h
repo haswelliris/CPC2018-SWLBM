@@ -25,7 +25,7 @@ struct lbm_init_param
 {
     // 主核进程的mpi rank
     int master_id;
-    // 用于控制程序步骤的flags
+    // master传入数据起始地址，slave接收地址
     long* host_flag, *slave_flag;
     // 迭代次数
     int iter;

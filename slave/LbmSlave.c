@@ -94,14 +94,16 @@ void standard_wait_flag(int slave_id)
                 sizeof(long) * FLAG_SIZE, (void*)(&get_reply), 0, 0, 0
             );
             while(get_reply != 1);
-            asm volatile ("#nop":::"memory");
+            //内存屏障
+            asm volatile ("nop":::"memory");
+            // 这个不是很懂
             if(local_flag[0] >= slave_flag_to_wait)
                 break;
         }
 
         slave_flag_to_wait++;
     }
-
+    // 广播16B*8
     int i;
     for(i = 0; i < FLAG_SIZE / 4; i++)
     {
