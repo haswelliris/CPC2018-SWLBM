@@ -3,6 +3,7 @@
 #include <math.h>
 #include <mpi.h>
 #include "Argument.h"
+#include <athread.h>
 
 int main(int argc, char *argv[])                                       
 {                                                                      
@@ -175,6 +176,7 @@ int main(int argc, char *argv[])
 	STEPS = SMALL_STEP;
 	#endif
 
+	athread_init();
 	for (s = 0; s < STEPS; s++) {
 
 		hch_timer_start(0);
@@ -337,6 +339,7 @@ int main(int argc, char *argv[])
 
 				int i0, i1, i2, i3;
 				int iter = 0;
+				int error_count = 0;
 				for(i0 = 0; i0 < 2; i0++)
 				{
 					for(i1 = 1; i1 < x_sec + 1; i1++)
@@ -352,14 +355,16 @@ int main(int argc, char *argv[])
 							}
 							else if(isnan(nodes[i0][i1][i2][i3][0]))
 							{
-								OLOG(myrank, "error data at (%d %d %d %d %d)\n", i0, i1, i2, i3, 0);
+								OLOG(my2drank, "error data at (%d %d %d %d %d) is nan, at [%d %d]\n", i0, i1, i2, i3, 0, coords[0], coords[1]);
 								iter = -1;
 								break;
 							}
-							else if(dumped[iter] != nodes[i0][i1][i2][i3][0])
+							else if(dumped[iter] - nodes[i0][i1][i2][i3][0] > 1e-6)
 							{
-								OLOG(myrank, "error data at (%d %d %d %d %d)\n", i0, i1, i2, i3, 0);
-								iter = -1;
+								if (error_count == 0)
+									OLOG(my2drank, "error data at [%d %d %d %d %d]: %f %f\n", i0, i1, i2, i3, 0, dumped[iter], nodes[i0][i1][i2][i3][0]);
+								// iter = -1;
+								error_count++;
 								break;
 							}
 							iter++;
@@ -370,6 +375,8 @@ int main(int argc, char *argv[])
 					if(iter == -1)
 						break;
 				}
+				if (error_count != 0)
+					OLOG(my2drank,"error_count = %d\n", error_count);
 			}
 		}
 	}

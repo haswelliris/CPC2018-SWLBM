@@ -2,6 +2,7 @@ TARGET = LbmCavity3D
 USER = $(shell whoami)
 CC = sw5cc
 LD = mpicc 
+getnan = -OPT:IEEE_arithmetic=1
 
 CFLAGS =  -O3 -host -I/usr/sw-mpp/mpi2/include/ -lm 
 

@@ -33,7 +33,6 @@ void collide(Real *****nodes,
 	parameter.nu = nu;
 	parameter.omega = omega;
 	parameter.CSmago = CSmago;
-	athread_init();
 	athread_spawn(athread_collide, &parameter);
 	athread_join();
 
