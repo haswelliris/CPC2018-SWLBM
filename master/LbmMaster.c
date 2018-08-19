@@ -45,18 +45,21 @@ void data_init( int _myrank, int _comm_sz, MPI_Comm *_mycomm,
     ru_send = _temp_ru_send;
     rd_send = _temp_rd_send;
 
-    param.myrank = _myrank;
-    param.x_sec = _x_sec;
-    param.y_sec = _y_sec;
-    param.Z = Z;
-    param.STEPS = STEPS;
-
-    param.host_flag = (long*)&host_flag[0];
-    param.slave_flag = (long*)&slave_flag[0];
 }
 
 void main_iter()
 {
+    lbm_param param;
+
+    param.master_id = myrank;
+    param.x_sec = x_sec;
+    param.y_sec = y_sec;
+    param.Z = Z;
+    param.iter = STEPS;
+
+    param.host_flag = (long*)&host_flag[0];
+    param.slave_flag = (long*)&slave_flag[0];
+
     //athread_init();
     //athread_spawn(cpe_athread_daemon, (void*)&param);
 

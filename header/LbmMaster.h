@@ -47,8 +47,6 @@ volatile long host_flag[FLAG_SIZE];
 volatile long slave_flag[FLAG_SIZE];
 volatile long flag_to_wait;
 
-lbm_param param;
-
 // put data into global field
 void data_init( int _myrank, int _comm_sz, MPI_Comm *_mycomm, 
 		        int *_dims, int *_coords,
