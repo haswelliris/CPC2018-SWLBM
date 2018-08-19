@@ -112,14 +112,12 @@ int main(int argc, char *argv[])
 	MLOG("Size                 :  %d x %d x %d\n", X, Y, Z);
         MLOG("Steps                :  %d\n", STEPS);
         MLOG("Number of Process    :  %d\n\n", size);
-
-	OLOG(myrank, "Task: X=[\t%d~\t%d], Y=[\t%d~\t%d]\n\n", Xst, Xed, Yst, Yed);
 	
         /*-----------------------------*
          * Space Allocate
          * ----------------------------*/
 
-	
+	// OLOG(my2drank, "[%d, %d] : %d %d %d %d\n", coords[0], coords[1], Xst, Xed, Yst, Yed);
 
 	flags = array3DI(x_sec + 2, y_sec + 2, Z);
 	nodes = array5DF(2, x_sec + 2, y_sec + 2, Z, 19);
@@ -168,104 +166,215 @@ int main(int argc, char *argv[])
 	/*----------------------------------------------------*
 	 * Main Calculation section
 	 * ---------------------------------------------------*/
-	TIME_ST();
+	// TIME_ST();
+
+	hch_timer_init_();
+
+	#define SMALL_STEP 2
+	#ifdef SMALL_STEP
+	STEPS = SMALL_STEP;
+	#endif
 
 	for (s = 0; s < STEPS; s++) {
 
+		hch_timer_start(0);
         bounce_send_init(X,
-			 Y,
-			 Z,
-			 Xst, 
-		         Xed, 
-			 Yst, 
-			 Yed, 
-			 x_sec, 
-			 y_sec, 
-			 current, 
-			 other, 
-			 nodes, 
-                         temp_left_send, 
-			 temp_right_send, 
-			 temp_up_send, 
-			 temp_down_send, 
-                         temp_ld_send, 
-			 temp_lu_send, 
-			 temp_rd_send, 
-			 temp_ru_send);
+			Y,
+			Z,
+			Xst, 
+			Xed, 
+			Yst, 
+			Yed, 
+			x_sec, 
+			y_sec, 
+			current, 
+			other, 
+			nodes, 
+			temp_left_send, 
+			temp_right_send, 
+			temp_up_send, 
+			temp_down_send, 
+			temp_ld_send, 
+			temp_lu_send, 
+			temp_rd_send, 
+			temp_ru_send);
+        hch_timer_stop(0);
 
+        hch_timer_start(1);
         bounce_communicate(mycomm, 
-		           dims, 
-			   coords, 
-			   x_sec, 
-			   y_sec, 
-			   Z,
-			   &count,
-			   sta,
-			   req,
-			   temp_left_send, 
-			   temp_right_send, 
-			   temp_up_send, 
-			   temp_down_send, 
-			   temp_left, 
-			   temp_right, 
-			   temp_up, 
-			   temp_down,
-			   temp_lu_send, 
-			   temp_ld_send, 
-			   temp_ru_send, 
-			   temp_rd_send, 
-			   temp_lu, 
-			   temp_ld, 
-			   temp_ru, 
-			   temp_rd);
+			dims, 
+			coords, 
+			x_sec, 
+			y_sec, 
+			Z,
+			&count,
+			sta,
+			req,
+			temp_left_send, 
+			temp_right_send, 
+			temp_up_send, 
+			temp_down_send, 
+			temp_left, 
+			temp_right, 
+			temp_up, 
+			temp_down,
+			temp_lu_send, 
+			temp_ld_send, 
+			temp_ru_send, 
+			temp_rd_send, 
+			temp_lu, 
+			temp_ld, 
+			temp_ru, 
+			temp_rd);
 
-	for(i = 0; i < count; i++) {
-		MPI_Wait(&req[i], &sta[i]);
-	}
+		hch_timer_stop(1);
 
+		hch_timer_start(2);
+		for(i = 0; i < count; i++) {
+			MPI_Wait(&req[i], &sta[i]);
+		}
+		hch_timer_stop(2);
+
+		hch_timer_start(3);
         bounce_update(X,
-		      Y,
-		      Z,
-		      Xst, 
-		      Xed, 
-		      Yst, 
-		      Yed, 
-		      myrank,
-		      x_sec, 
-		      y_sec,
-		      other,
-		      nodes,
-                      temp_left, 
-		      temp_right, 
-		      temp_up, 
-		      temp_down,
-                      temp_ld, 
-		      temp_lu, 
-		      temp_rd, 
-		      temp_ru);
+			Y,
+			Z,
+			Xst, 
+			Xed, 
+			Yst, 
+			Yed, 
+			myrank,
+			x_sec, 
+			y_sec,
+			other,
+			nodes,
+			temp_left, 
+			temp_right, 
+			temp_up, 
+			temp_down,
+			temp_ld, 
+			temp_lu, 
+			temp_rd, 
+			temp_ru);
+        hch_timer_stop(3);
 
-	stream(nodes, walls, flags, Xst, Xed, Yst, Yed, Z, current, other);
+        hch_timer_start(4);
+		stream(nodes, walls, flags, Xst, Xed, Yst, Yed, Z, current, other);
+		hch_timer_stop(4);
 
-	collide(nodes, flags, Xst, Xed, Yst, Yed, Z, current);
+		hch_timer_start(5);
+		collide(nodes, flags, Xst, Xed, Yst, Yed, Z, current);
+		hch_timer_stop(5);
 
-	other = current;
-	current = (current+1)%2;
+		other = current;
+		current = (current+1)%2;
 
-	if(myrank == 0 && STEPS >= 10 && (s + 1)%(STEPS/10) == 0.0) {
-		n += 1;
-		MLOG("Step >> [%d/%d] Calculation Completed %d%% \n", s + 1, STEPS, n * 10);
-	}
+		if(myrank == 0 && STEPS >= 10 && (s + 1)%(STEPS/10) == 0.0) {
+			n += 1;
+			MLOG("Step >> [%d/%d] Calculation Completed %d%% \n", s + 1, STEPS, n * 10);
+		}
+
+		hch_timer_stop(s);
 	
 	}
 
-	TIME_ED();
+	// TIME_ED();
+	hch_timer_finalize_();
 	/*-----------------------------*
  	 * OUTPUT 
  	 *-----------------------------*/
 
 	MLOG("Step >> Main Steps Done!\n\n");
 
-	OUTPUT(X, Y, Z, Xst, Xed, Yst, Yed, s, myrank, size, other, x_sec, y_sec, argv[1], local_image, image, rankinfo, nodes);
+	// OUTPUT(X, Y, Z, Xst, Xed, Yst, Yed, s, myrank, size, other, x_sec, y_sec, argv[1], local_image, image, rankinfo, nodes);
+
+	// Check Result
+	#define CHECK_RESULT 0
+	#define SAVE_RESULT 1
+	int dump = CHECK_RESULT;
+	FILE *outfile, *infile;
+	char fname[100];
+	sprintf(fname, "result/lbm_steps-%d_dump_rank-%02d.dat", STEPS, myrank);
+
+	if(dump == SAVE_RESULT) 
+	{
+		outfile = fopen(fname, "wb");
+		if(outfile == NULL)
+        {
+			MLOG("EMMMM!? cannot write\n");
+		}
+		else
+		{
+			MLOG("Writing\n");
+			int i0, i1, i2, i3;
+            for(i0 = 0; i0 < 2; i0++)
+            {
+                for(i1 = 1; i1 < x_sec + 1; i1++)
+                {
+					i2 = 1;
+                    for(i3 = 0; i3 < Z; i3++)
+                    {
+                        fwrite(nodes[i0][i1][i2][i3], sizeof(Real), 1, outfile);
+                    }
+                }
+            }
+            fclose(outfile);
+		}
+	}
+	else
+	{
+		infile = fopen(fname, "rb");
+		if(infile == NULL) {
+			MLOG("Please dump the data first :3\n");
+		}
+		else
+		{
+			MLOG("Checking\n");
+			if(1)
+			{
+            	Real* dumped = malloc(sizeof(Real) * 2 * (x_sec + 2) * 1 * Z * 1);
+				fread(dumped, sizeof(Real), 2 * (x_sec + 2) * 1 * Z * 1, infile);
+
+				int i0, i1, i2, i3;
+				int iter = 0;
+				for(i0 = 0; i0 < 2; i0++)
+				{
+					for(i1 = 1; i1 < x_sec + 1; i1++)
+					{
+						i2 = 1;
+						for(i3 = 0; i3 < Z; i3++)
+						{
+							if(isnan(dumped[iter]) && isnan(nodes[i0][i1][i2][i3][0]))
+							{
+							}
+							else if(isnan(dumped[iter]))
+							{
+							}
+							else if(isnan(nodes[i0][i1][i2][i3][0]))
+							{
+								OLOG(myrank, "error data at (%d %d %d %d %d)\n", i0, i1, i2, i3, 0);
+								iter = -1;
+								break;
+							}
+							else if(dumped[iter] != nodes[i0][i1][i2][i3][0])
+							{
+								OLOG(myrank, "error data at (%d %d %d %d %d)\n", i0, i1, i2, i3, 0);
+								iter = -1;
+								break;
+							}
+							iter++;
+						}
+						if(iter == -1)
+							break;
+					}
+					if(iter == -1)
+						break;
+				}
+			}
+		}
+	}
+
+	//---------------------------------------------------
 
 	arrayFree2DF(image);
 	arrayFree2DI(rankinfo);
