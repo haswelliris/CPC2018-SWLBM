@@ -59,7 +59,6 @@ int main(int argc, char *argv[])
          * ----------------------*/
 
     	setParameter();
-		STEPS = 2;
 	
 	/*---------------------------*
 	 * MPI Init
@@ -172,6 +171,9 @@ int main(int argc, char *argv[])
 	 * Main Calculation section
 	 * ---------------------------------------------------*/
 	TIME_ST();
+
+        // delete if final submit
+		STEPS = 2;
 
 	/*__iterate__(i,0,x_sec+2) \
 	__iterate__(j,0,y_sec+2) \
