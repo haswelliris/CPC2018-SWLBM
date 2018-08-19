@@ -22,7 +22,7 @@ __thread_local long slave_flag_to_wait;
 __thread_local volatile unsigned long get_reply, put_reply; // 2 * 8B
 __thread_local volatile unsigned long get_reply_god, put_reply_god; // 2 * 8B
 __thread_local volatile unsigned long get_reply_target, put_reply_target; // 2 * 8B
-__thread_local volatile intv8 bcast_tmp256;                 // 8B
+__thread_local volatile intv8 bcast_tmp256;                 // 8 *4B
 
 void cpe0_bcast_256(int slave_id, volatile intv8 *bcast_data);
 void standard_wait_flag(int slave_id);
@@ -32,6 +32,7 @@ void async_write_data(void* mpe_data_ptr, void* cpe_data_ptr, int size, int slav
 void std_lbm();
 void insane_lbm();
 
+// 守护进程函数，主要逻辑步骤都在这儿
 void cpe_athread_daemon(void *_param)
 {
     int i, j, k;
@@ -43,10 +44,10 @@ void cpe_athread_daemon(void *_param)
 
     if (slave_id == 0 && param.master_id == 0)
     {
-        printf("@@@ MESSAGE FROM CPE 0 @@@\n");
+        printf("\n@@@ MESSAGE FROM CPE 0 @@@\n");
         printf("iter = %d, x_sec = %d, y_sec = %d, z_sec = %d\n", param.iter, param.x_sec, param.y_sec, param.Z);
         printf("ptrs: %x, %x\n", param.host_flag, param.slave_flag);
-        printf("@@@ MESSAGE FROM CPE 0 @@@\n");
+        printf("\n");
     }
     // 
     for (i = 0; i < FLAG_SIZE; i++)
@@ -61,9 +62,9 @@ void cpe_athread_daemon(void *_param)
 
     if (slave_id == 0 && param.master_id == 0)
     {
-        printf("@@@ MESSAGE FROM CPE 0 @@@\n");
+        printf("\n@@@ MESSAGE FROM CPE 0 @@@\n");
         printf("CPE ENTER LOOP\n");
-        printf("@@@ MESSAGE FROM CPE 0 @@@\n");
+        printf("\n");
     }
 
     while (1)
@@ -76,6 +77,7 @@ void cpe_athread_daemon(void *_param)
             standard_write_flag(slave_id);
             break;
         }
+        // 每一个从核函数，加在下方
         else if (local_flag[KERNEL_ACTION] == STD_LBM_FLAG)
         {
             std_lbm();
@@ -86,6 +88,7 @@ void cpe_athread_daemon(void *_param)
         }
         else
         {
+            // todo
         }
     }
 }
@@ -201,15 +204,7 @@ void async_write_data(void* mpe_data_ptr, void* cpe_data_ptr, int size, int slav
     //}
 }
 
-//std area
-
-void std_lbm()
-{
-    //get the x & y cnt
-
-}
-
-void insane_lbm()
-{
-
-}
+// 其他暂时未用到的函数，分开放，避免文件过长，也方便多人编辑
+// 全部完成后复制到下方
+#include "SlaveKernalFunc.c"
+#include "SlaveWorks.c"

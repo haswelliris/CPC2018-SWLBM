@@ -1,5 +1,7 @@
 #include "../header/LbmMaster.h"
 
+#define CCPS 1450000000.0
+
 void data_init( int _myrank, int _comm_sz, MPI_Comm *_mycomm, 
 		        int *_dims, int *_coords,
                 int _Xst, int _Xed, int _Yst, int _Yed, int _x_sec, int _y_sec, 
@@ -60,8 +62,8 @@ void main_iter()
     param.host_flag = (long*)&host_flag[0];
     param.slave_flag = (long*)&slave_flag[0];
 
-    //athread_init();
-    //athread_spawn(cpe_athread_daemon, (void*)&param);
+    athread_init();
+    athread_spawn(cpe_athread_daemon, (void*)&param);
 
     int i, j, k, l, s;
 
@@ -70,9 +72,10 @@ void main_iter()
     MPI_Request req[16];
     int n = 0;
     int count;
-
+	unsigned long t1,t2;
+	// 每轮迭代计时
+	t1 = rpcc();
     for (s = 0; s < STEPS; s++) {
-
         bounce_send_init(X,
 			 Y,
 			 Z,
@@ -152,12 +155,35 @@ void main_iter()
 		other = current;
 		current = (current+1)%2;
 
-		if(myrank == 0 && STEPS >= 10 && (s + 1)%(STEPS/10) == 0.0) {
-			n += 1;
+		t2 = rpcc();
+		//if(myrank == 0 && STEPS >= 10 && (s + 1)%(STEPS/10) == 0.0) {
+		//  n += 1;
+		if(myrank == 0) {
+
 			MLOG("Step >> [%d/%d] Calculation Completed %d%% \n", s + 1, STEPS, n * 10);
+			MLOG("Using Time : %.6f seconds\n",(t2 -t1) * 1.0 / CCPS);
 		}
+		t1 = t2;
 	
 	}
 
-    //terminate_athread_daemon();
+    terminate_athread_daemon();
+}
+
+void terminate_athread_daemon()
+{
+    host_flag[MPI_RANK] = myrank;
+    host_flag[KERNEL_ACTION] = EXIT_FLAG;
+    asm volatile ("nop":::"memory");
+    host_flag[0] = host_flag[0] + 1;
+    wait_slave_flag();
+    wait_slave_flag();
+
+    athread_join();
+}
+
+void wait_slave_flag()
+{
+    while(slave_flag[0] < flag_to_wait);
+    flag_to_wait++;
 }
