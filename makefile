@@ -3,7 +3,7 @@ USER = $(shell whoami)
 CC = sw5cc
 LD = mpicc 
 
-CFLAGS =  -O3 -host -I/usr/sw-mpp/mpi2/include/ -lm 
+CFLAGS =  -O3 -host -I/usr/sw-mpp/mpi2/include/ -lm
 
 OBJ = LbmCavity3D.o Parallel.o MasterController.o MasterCollide.o MasterStream.o SlaveController.o SlaveStream.o SlaveCollide.o 
 

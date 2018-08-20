@@ -30,14 +30,18 @@ __thread_local const float ww[19] = {
 		(1./36.),(1./36.),(1./36.),(1./36.),(1./36.),(1./36.),
 		(1./36.),(1./36.),(1./36.),(1./36.),(1./36.),(1./36.),(1./3.) };
 
+__thread_local const int ddfInv[19] = {1, 0, 3, 2, 5, 4, 9, 8, 7, 6, 13, 12, 11, 10, 17, 16, 15, 14, 18};
+
 __thread_local int my_id, my2drank;
-__thread_local int Xst, Xed, Yst, Yed, nz, current;
+__thread_local int Xst, Xed, Yst, Yed, nz, current, other;
 __thread_local float athread_nu, athread_omega, athread_CSmago;
 __thread_local int ***flags;
 __thread_local int tmp_flags[500];
 __thread_local float *****nodes;
-__thread_local float tmp_nodes[500][19];
-__thread_local int i, j, k, l;
+__thread_local float tmp_nodes[500][19], buffer_nodes[250][19];
+__thread_local int ****walls;
+__thread_local int tmp_walls[64][19];
+__thread_local int i, j, k, l, r;
 __thread_local float rho, u_x, u_y, u_z;
 __thread_local float fi;
 __thread_local float feq[19], Qo, omegaNew;
@@ -45,6 +49,8 @@ __thread_local float feq[19], Qo, omegaNew;
 __thread_local float tmp;
 __thread_local float Sij[3][3],S;
 __thread_local int x_1, y_1, k_1;
+
+__thread_local int inv;
 
 __thread_local volatile unsigned long get_reply,put_reply;
 __thread_local volatile int total_mask = 0xFFFFFFFF, lpc, trump_i, trump_j;
@@ -61,6 +67,7 @@ void slaveInit(void* paras) {
 	nz = parameter.nz;
 	flags = parameter.flags;
 	nodes = parameter.nodes;
+	walls = parameter.walls;
 	athread_omega = parameter.omega;
 	athread_CSmago = parameter.CSmago;
 }
@@ -83,20 +90,48 @@ void slaveController(void* paras) {
 	// }
 }
 
-void SlaveCollide(void* paras)
-{
+// #define get_mem(from, to, size) { \
+// 	get_reply = 0; \
+// 	athread_get(PE_MODE,from,to,size,&get_reply,0,0,0); \
+// 	while(get_reply != 1); \
+// }
+
+// void shift(float *****from, int *tl, int *tk) {
+// 	get_mem(from, &buffer_nodes[0][0], 250*19*sizeof(float));
+// 	for (r = 0; r < 3; r++) {
+// 		for (k = 0; k < 250; k++) {
+// 			if(tmp_flags[k] == FLUID)
+// 				tmp_nodes[k][tl[r]] = buffer_nodes[k+tk[r]][tl[r]];
+// 			if(tmp_flags[k] == BOUNCE) {
+// 				if(walls[i - Xst][j - Yst][k][l])
+// 					tmp_nodes[k][l] = buffer_nodes[k][ddfInv[l]];
+// 				else
+// 					tmp_nodes[k][tl[r]] = buffer_nodes[k+tk[r]][tl[r]];
+// 			}
+// 		}
+// 	}
+// }
+
+void SlaveCollide(void* paras) {
 	current = *(int*)paras;
 	for(i = Xst+1; i < Xed-1; i++) {
 		for(j = Yst+1; j < Yed-1; j++) {
 			if (((i-Xst-1)*(Yed-Yst-2)+(j-Yst-1))%64 != my_id)
 				continue;
-
 			get_reply = 0;
 			athread_get(PE_MODE,&nodes[current][i-Xst+1][j-Yst+1][0][0],&tmp_nodes[0][0],500*19*sizeof(float),&get_reply,0,0,0);
 			athread_get(PE_MODE,&flags[i-Xst+1][j-Yst+1][0],tmp_flags,500*sizeof(int),&get_reply,0,0,0);
 			while(get_reply != 2);
+
+			// get_reply = 0;
+			// // athread_get(PE_MODE,&nodes[current][i-Xst+1][j-Yst+1][0][0],&tmp_nodes[0][0],500*19*sizeof(float),&get_reply,0,0,0);
+			// athread_get(PE_MODE,&flags[i-Xst+1][j-Yst+1][0],tmp_flags,500*sizeof(int),&get_reply,0,0,0);
+			// while(get_reply != 1);
+
+			// shift()
+
 			for(k = 0; k < nz; k++) {
-				if(tmp_flags[k] == 0 || tmp_flags[k] == 3) {
+				if(tmp_flags[k] & (1<<20) || tmp_flags[k] & (1<<19)) {
 					rho = 0.0, u_x = 0.0, u_y = 0.0, u_z = 0.0;
 					for (l = 0; l < 19; l++) {
 						fi = tmp_nodes[k][l];

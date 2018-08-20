@@ -2,7 +2,7 @@
 #include "Argument.h"
 #include "SlaveController.h"
 
-// #define SMALL_STEP 2
+#define SMALL_STEP 2
 
 extern SLAVE_FUN(slaveController)();
 extern SLAVE_FUN(slaveInit)();
@@ -50,9 +50,27 @@ void masterController(
 	STEPS = SMALL_STEP;
 	#endif
 
+
+	int i, j, k, l;
+	int ***newFalgs = array3DI(x_sec+2,y_sec+2,Z);
+	memset(&newFalgs[0][0][0], 0, sizeof(int)*(x_sec+2)*(y_sec+2)*Z);
+
+	for(i = Xst; i < Xed; i++)
+		for(j = Yst; j < Yed; j++)
+			for(k = 0; k < Z; k++){
+				if (flags[i-Xst+1][j-Yst+1][k] == FLUID)
+					newFalgs[i-Xst+1][j-Yst+1][k] |= 1<<20;
+				else if(flags[i-Xst+1][j-Yst+1][k] == BOUNCE)
+					newFalgs[i-Xst+1][j-Yst+1][k] |= 1<<19;
+				for(l = 0; l < 19; l++)
+					if(walls[i-Xst][j-Yst][k][l])
+						newFalgs[i-Xst+1][j-Yst+1][k] |= 1<<l;
+			}
+
 	struct athread_init_parameter parameter;
 	parameter.nodes = nodes;
-	parameter.flags = flags;
+	parameter.flags = newFalgs;
+	parameter.walls = walls;
 	parameter.Xst = Xst;
 	parameter.Xed = Xed;
 	parameter.Yst = Yst;
@@ -70,11 +88,11 @@ void masterController(
 	athread_spawn(slaveInit, &parameter);
 	athread_join();
 
-	int s, i, n = 0;
+	int s, n = 0;
 
 	for (s = 0; s < STEPS; s++) {
 
-		slaveStream(nodes, walls, flags, Xst, Xed, Yst, Yed, Z, current, other);
+		slaveStream(nodes, walls, newFalgs, Xst, Xed, Yst, Yed, Z, current, other);
 		// slaveCollide(nodes, flags, Xst, Xed, Yst, Yed, Z, current);
 		athread_spawn(SlaveCollide, &current);
 
