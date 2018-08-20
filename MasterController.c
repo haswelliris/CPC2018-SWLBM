@@ -6,6 +6,7 @@
 
 extern SLAVE_FUN(slaveController)();
 extern SLAVE_FUN(slaveInit)();
+extern SLAVE_FUN(SlaveCollide)();
 
 void masterController(
 			int ***flags,
@@ -74,7 +75,9 @@ void masterController(
 	for (s = 0; s < STEPS; s++) {
 
 		slaveStream(nodes, walls, flags, Xst, Xed, Yst, Yed, Z, current, other);
-		slaveCollide(nodes, flags, Xst, Xed, Yst, Yed, Z, current);
+		// slaveCollide(nodes, flags, Xst, Xed, Yst, Yed, Z, current);
+		athread_spawn(SlaveCollide, &current);
+		athread_join();
 
         bounce_send_init(X,
 			Y,
