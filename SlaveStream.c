@@ -3,7 +3,7 @@
 /*------------------------------------
  *      Main Computing Part
  *-----------------------------------*/
-void stream(Real *****nodes,
+void slaveStream(Real *****nodes,
 		    int ****walls,
 			int ***flags,
 			int Xst,
@@ -17,8 +17,8 @@ void stream(Real *****nodes,
 	int i, j, k, l;
 	int inv;
 
-	for(i = Xst; i < Xed; i++) {
-		for(j = Yst; j < Yed; j++) {
+	for(i = Xst+1; i < Xed-1; i++) {
+		for(j = Yst+1; j < Yed-1; j++) {
 			for(k = 0; k < nz; k++) {
 				if(flags[i - Xst + 1][j - Yst + 1][k] == FLUID) {
 					for(l = 0; l < 19; l++) {

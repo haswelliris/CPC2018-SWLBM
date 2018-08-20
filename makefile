@@ -2,25 +2,24 @@ TARGET = LbmCavity3D
 USER = $(shell whoami)
 CC = sw5cc
 LD = mpicc 
-getnan = -OPT:IEEE_arithmetic=1
 
 CFLAGS =  -O3 -host -I/usr/sw-mpp/mpi2/include/ -lm 
 
-OBJ = LbmCavity3D.o Collide.o Parallel.o Stream.o HchTimer.o collide_slave.o
+OBJ = LbmCavity3D.o Parallel.o MasterController.o MasterCollide.o MasterStream.o SlaveController.o SlaveStream.o SlaveCollide.o 
 
 LIB = lib/liblbm.a
 
 $(TARGET): $(OBJ)
 	$(LD) $(OBJ) $(LIB) -o $(TARGET) 
-	rm $(OBJ)
+	# rm $(OBJ)
 
-collide_slave.o : collide_slave.c
+SlaveController.o: SlaveController.c
 	sw5cc -c -slave $^
 
 %.o:%.c
 	$(CC) $(CFLAGS) -c $<
 
-run: $(TARGET)
+run:$(TARGET)
 	bsub -I -b -q q_sw_cpc_2 -cgsp 64 -n 16 -np 4  -share_size 6500 -host_stack 500 -J test ./LbmCavity3D $(USER)
 
 #-------------------------------------*
