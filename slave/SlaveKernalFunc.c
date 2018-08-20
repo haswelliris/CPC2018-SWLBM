@@ -5,16 +5,6 @@
 #define __thread_local const //本地IDE美化(__thread_local 是神威从核编译的关键字, 相当于cuda的片上内存)
 #endif
 
-int BLOCK_SIZE(int block_id, int total_blocks, int n)
-{
-    return (n / total_blocks) + ((n % total_blocks > block_id) ? 1 : 0);
-}
-
-int BLOCK_LOW(int block_id, int total_blocks, int n)
-{
-    return (n / total_blocks) * block_id + ((n % total_blocks > block_id) ? block_id : n % total_blocks);
-}
-
 void* nw_ldm_malloc(int sz)//will not see FBI WARNING during compile
 {
     long ret = ldm_malloc(sz);
