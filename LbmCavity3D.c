@@ -205,6 +205,7 @@ int main(int argc, char *argv[])
 		    req,
 		    count
 		);
+		s = STEPS;
 
 	TIME_ED();
 	/*-----------------------------*
@@ -213,7 +214,7 @@ int main(int argc, char *argv[])
 
 	MLOG("Step >> Main Steps Done!\n\n");
 
-	// OUTPUT(X, Y, Z, Xst, Xed, Yst, Yed, s, myrank, size, other, x_sec, y_sec, argv[1], local_image, image, rankinfo, nodes);
+	OUTPUT(X, Y, Z, Xst, Xed, Yst, Yed, s, myrank, size, other, x_sec, y_sec, argv[1], local_image, image, rankinfo, nodes);
 
 	// Check Result
 	#define CHECK_RESULT 0

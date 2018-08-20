@@ -2,7 +2,7 @@
 #include "Argument.h"
 #include "SlaveController.h"
 
-#define SMALL_STEP 2
+// #define SMALL_STEP 2
 
 extern SLAVE_FUN(slaveController)();
 extern SLAVE_FUN(slaveInit)();
@@ -77,7 +77,6 @@ void masterController(
 		slaveStream(nodes, walls, flags, Xst, Xed, Yst, Yed, Z, current, other);
 		// slaveCollide(nodes, flags, Xst, Xed, Yst, Yed, Z, current);
 		athread_spawn(SlaveCollide, &current);
-		athread_join();
 
         bounce_send_init(X,
 			Y,
@@ -153,6 +152,8 @@ void masterController(
 
 		masterStream(nodes, walls, flags, Xst, Xed, Yst, Yed, Z, current, other);
 		masterCollide(nodes, flags, Xst, Xed, Yst, Yed, Z, current);
+		
+		athread_join();
 
 		other = current;
 		current = (current+1)%2;

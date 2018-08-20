@@ -87,9 +87,10 @@ void SlaveCollide(void* paras)
 {
 	current = *(int*)paras;
 	for(i = Xst+1; i < Xed-1; i++) {
-		if ((i-Xst)%64 != my_id)
-			continue;
 		for(j = Yst+1; j < Yed-1; j++) {
+			if (((i-Xst-1)*(Yed-Yst-2)+(j-Yst-1))%64 != my_id)
+				continue;
+
 			get_reply = 0;
 			athread_get(PE_MODE,&nodes[current][i-Xst+1][j-Yst+1][0][0],&tmp_nodes[0][0],500*19*sizeof(float),&get_reply,0,0,0);
 			athread_get(PE_MODE,&flags[i-Xst+1][j-Yst+1][0],tmp_flags,500*sizeof(int),&get_reply,0,0,0);
