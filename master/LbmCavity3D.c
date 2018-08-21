@@ -263,7 +263,7 @@ int main(int argc, char *argv[])
                             d4 = 0;
                             //for(d4 = 0; d4 < 19; d4++)
                             {
-                                if(fabs(my_check[iter] - nodes[d0][d1][d2][d3][d4]) > 1e-7)
+                                if(isnan(nodes[d0][d1][d2][d3][d4]) || fabs(my_check[iter] - nodes[d0][d1][d2][d3][d4]) > 1e-7)
                                 {
                                     printf("myrank = %d, 5d = %d %d %d %d %d, wrong! standard = %f, this = %f\n", 
                                            myrank, d0, d1, d2, d3, d4, my_check[iter], nodes[d0][d1][d2][d3][d4]);

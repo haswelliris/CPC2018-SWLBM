@@ -212,6 +212,7 @@ __thread_local realt  Sij[12] __attribute__((aligned(32)));
 __thread_local realt  feq[20] __attribute__((aligned(32)));
 __thread_local floatv4  simd_feq[19] __attribute__((aligned(32)));
 __thread_local floatv4  simd_Sij[9] __attribute__((aligned(32)));
+__thread_local floatv4  simd_current[19] __attribute__((aligned(32)));
 // __thread_local realt  a_current_line[20] __attribute__((aligned(32)));
 
 void s_stream_step()
@@ -394,6 +395,9 @@ void s_collide_step(int st, int ed)
 }
 
 //TODO !!!!精度丢失严重，需要重写或者debug
+__thread_local float Qo4[4] __attribute__((aligned(32)));
+__thread_local float S4[4] __attribute__((aligned(32)));
+__thread_local float omegaNew4[4] __attribute__((aligned(32)));
 void s_simd_collide_step()
 {
 	int STEP_SIZE_MAIN = (STEP_SIZE / 4) * 4;
@@ -401,20 +405,29 @@ void s_simd_collide_step()
 	floatv4 rho, u_x, u_y, u_z;
 	floatv4 fi;
     floatv4 Qo, omegaNew;
-	int sis, l;
+	int sis, l, ii;
 	for(sis = 0; sis < STEP_SIZE_MAIN; sis+=4)
     {
-		if(1)
 		//if(s_step_flags[sis] == S_FLUID || s_step_flags[sis] == S_BOUNCE)
         {
+            for (l = 0; l < 19; l++) {
+                for(ii = 0; ii < 4; ++ii)
+                {
+                    if(s_step_flags[sis + ii] == S_FLUID || s_step_flags[sis + ii] == S_BOUNCE)
+				    {
+						feq[ii] = s_step_current_line[(sis + ii) * 19 + l];
+				    }
+                    else
+                    {
+                        feq[ii] = 0.1;
+                    }
+                }
+				simd_load(simd_current[l], &(feq[0]));
+            }
+
             rho = 0.0, u_x = 0.0, u_y = 0.0, u_z = 0.0;
             for (l = 0; l < 19; l++) {
-				fi = simd_set_floatv4(
-					s_step_current_line[sis * 19 + l],
-					s_step_current_line[(sis + 1) * 19 + l],
-					s_step_current_line[(sis + 2) * 19 + l],
-					s_step_current_line[(sis + 3) * 19 + l]
-				);
+				fi = simd_current[l];
                 rho = rho + fi;
                 u_x = s_e_x[l] * fi + u_x;
                 u_y = s_e_y[l] * fi + u_y;
@@ -433,47 +446,35 @@ void s_simd_collide_step()
                                        (9.0/2.0 * tmp * tmp));
             }
 
-            Qo=0;
             floatv4 S;
             int x1, y1, k1;
 			for(x1 = 0; x1 < 9; x1++) {
 				simd_Sij[x1] = 0;
 			}
 			for(k1 = 0; k1 < 19; k1++) {
-				floatv4 tmp = simd_set_floatv4(
-					s_step_current_line[sis * 19 + k1],
-					s_step_current_line[(sis + 1) * 19 + k1],
-					s_step_current_line[(sis + 2) * 19 + k1],
-					s_step_current_line[(sis + 3) * 19 + k1]
-				);
 				for(x1 = 0; x1 < 3; x1++) {
 					for(y1 = 0; y1 < 3; y1++) {
-                       simd_Sij[x1 * 3 + y1] = s_e_T[k1][x1] * s_e_T[k1][y1] * (tmp - simd_feq[k1]) + simd_Sij[x1 * 3 + y1];
+                       simd_Sij[x1 * 3 + y1] = s_e_T[k1][x1] * s_e_T[k1][y1] * (simd_current[k1] - simd_feq[k1]) + simd_Sij[x1 * 3 + y1];
                     }
 				}
             }
+            Qo=0.0;
 			for(x1 = 0; x1 < 9; x1++) {
 				Qo = simd_Sij[x1] * simd_Sij[x1] + Qo;
 			}
 			
-			Qo = __builtin_sw64_sgqrts(Qo);
-			Qo = param.nu * param.nu + 18 * param.CSmago * param.CSmago * Qo;
-			Qo = __builtin_sw64_sgqrts(Qo);
+            simd_store(Qo, &Qo4[0]);
             param.nu = (2.0 / param.omega - 1.0) / 6.0;
-            S = (-param.nu + Qo) / 6.0 / param.CSmago / param.CSmago;
-            omegaNew = 1.0 / (3.0 * (param.nu + param.CSmago * param.CSmago * S) + 0.5);
-
-
-
-			
+            #pragma unroll[4]
+            for(ii = 0; ii < 4; ii++)
+            {
+                S4[ii] = (-param.nu + sqrt(param.nu * param.nu + 18 * param.CSmago * param.CSmago * sqrt(Qo4[ii]))) / 6.0 / param.CSmago / param.CSmago;
+				omegaNew4[ii] = 1.0 / (3.0 * (param.nu + param.CSmago * param.CSmago * S4[ii]) + 0.5);
+            }
+            simd_load(omegaNew, &omegaNew4[0]);
+            
             for (l = 0; l < 19; l++) {
-				floatv4 tmp = simd_set_floatv4(
-					s_step_current_line[sis * 19 + l],
-					s_step_current_line[(sis + 1) * 19 + l],
-					s_step_current_line[(sis + 2) * 19 + l],
-					s_step_current_line[(sis + 3) * 19 + l]
-				);
-				simd_feq[l] = (1.0 - omegaNew) * tmp + omegaNew * simd_feq[l];
+				simd_feq[l] = (1.0-omegaNew) * simd_current[k1] + omegaNew * simd_feq[l];
             }
 			
 			for (l = 0; l < 19; l++) {
@@ -558,7 +559,8 @@ void s_stream_and_collide_xy(int nz,
         edpf(CPF1_STREAM);
         
         stpf();
-        s_collide_step(0, STEP_SIZE);
+        s_simd_collide_step();
+        //s_collide_step(0, STEP_SIZE);
         edpf(CPF1_COLLIDE);
 
         stpf();
