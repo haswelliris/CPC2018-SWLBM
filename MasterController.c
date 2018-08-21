@@ -100,95 +100,55 @@ void masterController(
 
 		hch_timer_start(1);
         bounce_send_init(X,
-			Y,
-			Z,
-			Xst, 
-			Xed, 
-			Yst, 
-			Yed, 
-			x_sec, 
-			y_sec, 
-			current, 
-			other, 
-			nodes, 
-			temp_left_send, 
-			temp_right_send, 
-			temp_up_send, 
-			temp_down_send, 
-			temp_ld_send, 
-			temp_lu_send, 
-			temp_rd_send, 
-			temp_ru_send);
+					  Y,
+					  Z,
+					  Xst, 
+					  Xed, 
+					  Yst, 
+					  Yed, 
+					  x_sec,
+					  y_sec,
+					  current, 
+					  other, 
+					  nodes,
+					  temp_left_send,
+					  temp_right_send, 
+					  temp_up_send, 
+					  temp_down_send,
+					  temp_ld_send, 
+					  temp_lu_send, 
+					  temp_rd_send, 
+					  temp_ru_send,
+
+					mycomm, 
+					dims, 
+					coords,
+					&count,
+					sta,
+					req,
+					temp_left, 
+					temp_right, 
+					temp_up, 
+					temp_down,
+					temp_lu, 
+					temp_ld, 
+					temp_ru, 
+					temp_rd,
+ 
+					myrank);
         hch_timer_stop(1);
 
 		hch_timer_start(2);
-        bounce_communicate(mycomm, 
-			dims, 
-			coords, 
-			x_sec, 
-			y_sec, 
-			Z,
-			&count,
-			sta,
-			req,
-			temp_left_send, 
-			temp_right_send, 
-			temp_up_send, 
-			temp_down_send, 
-			temp_left, 
-			temp_right, 
-			temp_up, 
-			temp_down,
-			temp_lu_send, 
-			temp_ld_send, 
-			temp_ru_send, 
-			temp_rd_send, 
-			temp_lu, 
-			temp_ld, 
-			temp_ru, 
-			temp_rd);
+		masterStream(nodes, walls, flags, Xst, Xed, Yst, Yed, Z, current, other);
         hch_timer_stop(2);
 
 		hch_timer_start(3);
-		for(i = 0; i < count; i++) {
-			MPI_Wait(&req[i], &sta[i]);
-		}
+		masterCollide(nodes, flags, Xst, Xed, Yst, Yed, Z, current);
         hch_timer_stop(3);
 
 		hch_timer_start(4);
-        bounce_update(X,
-			Y,
-			Z,
-			Xst, 
-			Xed, 
-			Yst, 
-			Yed, 
-			myrank,
-			x_sec, 
-			y_sec,
-			other,
-			nodes,
-			temp_left, 
-			temp_right, 
-			temp_up, 
-			temp_down,
-			temp_ld, 
-			temp_lu, 
-			temp_rd, 
-			temp_ru);
-        hch_timer_stop(4);
-
-		hch_timer_start(5);
-		masterStream(nodes, walls, flags, Xst, Xed, Yst, Yed, Z, current, other);
-        hch_timer_stop(5);
-
-		hch_timer_start(6);
-		masterCollide(nodes, flags, Xst, Xed, Yst, Yed, Z, current);
-        hch_timer_stop(6);
-
-		hch_timer_start(7);
 		athread_join();
-		hch_timer_stop(7);
+		hch_timer_stop(4);
 
 		other = current;
 		current = (current+1)%2;

@@ -7,7 +7,7 @@ int _my_rank, _comm_sz;
 
 //hch intel timer
 #define MAX_HCH_TIMER_LEN 256
-#define HCH_TIMER_CNT 8
+#define HCH_TIMER_CNT 5
 
 #if defined (__i386__)
 #define HCH_CC_TYPE unsigned long long
@@ -60,7 +60,7 @@ void hch_timer_finalize_()
         // printf("hch_timer_finalize_\n");
         FILE * fp;
         fp = fopen ("hch_timer_profile.csv", "w");
-        fprintf(fp, "my_rank, athread init, send init, send, wait, update, stream, collide, athread join");
+        fprintf(fp, "my_rank, athread init, send_receive, stream, collide, athread join");
         fprintf(fp, "\n");
         fflush(fp);
         fclose(fp);

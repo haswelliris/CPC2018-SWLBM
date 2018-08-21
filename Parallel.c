@@ -66,7 +66,7 @@ void bounce_send_init(int X,
 					  int Yed, 
 					  int x_sec,
 					  int y_sec,
-					  int corrent, 
+					  int current, 
 					  int other, 
 					  Real *****nodes,
 					  Real ***temp_left_send,
@@ -76,7 +76,24 @@ void bounce_send_init(int X,
 					  Real **temp_ld_send, 
 					  Real **temp_lu_send, 
 					  Real **temp_rd_send, 
-					  Real **temp_ru_send)
+					  Real **temp_ru_send,
+
+					MPI_Comm mycomm, 
+					int *dims, 
+					int *coords,
+					int *l_count,
+					MPI_Status *sta,
+					MPI_Request *req,
+					Real ***temp_left, 
+					Real ***temp_right, 
+					Real ***temp_up, 
+					Real ***temp_down,
+					Real **temp_lu, 
+					Real **temp_ld, 
+					Real **temp_ru, 
+					Real **temp_rd,
+ 
+					int myrank)
 {
     int i, j, k, l;
 
@@ -151,35 +168,11 @@ void bounce_send_init(int X,
 			}
 		}
 	}
-}
+// }
 
-void bounce_communicate(MPI_Comm mycomm, 
-		                int *dims, 
-					    int *coords, 
-						int x_sec, 
-						int y_sec,  
-						int Z,
-						int *l_count,
-						MPI_Status *sta,
-						MPI_Request *req,
-						Real ***temp_left_send, 
-						Real ***temp_right_send, 
-						Real ***temp_up_send, 
-						Real ***temp_down_send, 
-						Real ***temp_left, 
-						Real ***temp_right, 
-						Real ***temp_up, 
-						Real ***temp_down,
-						Real **temp_lu_send, 
-						Real **temp_ld_send, 
-						Real **temp_ru_send, 
-						Real **temp_rd_send, 
-						Real **temp_lu, 
-						Real **temp_ld, 
-						Real **temp_ru, 
-						Real **temp_rd)
-{
-	int i, count = 0;
+// void bounce_communicate()
+// {
+	int count = 0;
 
      if(left_nbr != -1) {
          MPI_Irecv(&temp_left[0][0][0], 
@@ -317,30 +310,14 @@ void bounce_communicate(MPI_Comm mycomm,
 				   &req[count++]);
      }
 	 (*l_count) = count;
-}
+// }
 
-void bounce_update(int X,
-					int Y,
-					int Z,
-					int Xst, 
-		            int Xed, 
-					int Yst, 
-					int Yed, 
-					int myrank,
-					int x_sec, 
-					int y_sec,
-					int other,
-					Real *****nodes,
-				    Real ***temp_left, 
-					Real ***temp_right, 
-					Real ***temp_up, 
-					Real ***temp_down,
-				    Real **temp_ld, 
-					Real **temp_lu, 
-					Real **temp_rd, 
-					Real **temp_ru)
-{
-    int i, j, k, l;
+	for(i = 0; i < count; i++) {
+		MPI_Wait(&req[i], &sta[i]);
+	}
+
+// void bounce_update()
+// {
 
     if(Xst != 0) { 
 		for (i = Yst; i < Yed; i++) {
