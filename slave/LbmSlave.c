@@ -210,9 +210,6 @@ __thread_local realt s_e_T[19][4] __attribute__((aligned(32))) = {
 __thread_local int s_dfInv[19] __attribute__((aligned(32))) = {1, 0, 3, 2, 5, 4, 9, 8, 7, 6, 13, 12, 11, 10, 17, 16, 15, 14, 18};
 __thread_local realt  Sij[12] __attribute__((aligned(32)));
 __thread_local realt  feq[20] __attribute__((aligned(32)));
-__thread_local floatv4  simd_feq[19] __attribute__((aligned(32)));
-__thread_local floatv4  simd_Sij[9] __attribute__((aligned(32)));
-__thread_local floatv4  simd_current[19] __attribute__((aligned(32)));
 // __thread_local realt  a_current_line[20] __attribute__((aligned(32)));
 
 void s_stream_step()
@@ -266,26 +263,22 @@ void s_collide_step(int st, int ed)
         {
             //rho = 0.0, u_x = 0.0, u_y = 0.0, u_z = 0.0;
 			floatv4 U = simd_set_floatv4(0., 0., 0., 0.), E;
+            #pragma unroll[19]
             for (l = 0; l < 19; l++) {
 				// fi = a_current_line[l];
 				fi = s_step_current_line[sis * 19 + l];
 				E = simd_set_floatv4(1., s_e_T[l][0], s_e_T[l][1], s_e_T[l][2]);
 				U = fi * E + U;
-                //rho += fi;
-                //u_x += s_e_x[l] * fi;
-                //u_y += s_e_y[l] * fi;
-                //u_z += s_e_z[l] * fi;
             }
 			simd_store(U, &(Sij[0]));
-			rho = Sij[0];
-            u_x = Sij[1];
-            u_y = Sij[2];
-            u_z = Sij[3];
+			rho = Sij[0], u_x = Sij[1], u_y = Sij[2], u_z = Sij[3];
 			
             u_x /= rho;
             u_y /= rho;
             u_z /= rho;
 
+            //用simd会丢精度, 但是会快(2/100)s/次
+            #pragma unroll[19]
             for (l = 0; l < 19; l++) {
                 const realt tmp = (s_e_x[l] * u_x + s_e_y[l] * u_y + s_e_z[l] * u_z);
                 feq[l] = s_w[l] * rho * (1.0 -
@@ -294,18 +287,14 @@ void s_collide_step(int st, int ed)
                                        (9.0/2.0 * tmp * tmp));
             }
 
-            Qo=0;
             realt S;
 			floatv4 vs1, vs2, vs3, vs4, vs5 ,ve, vk1, vk2, vk3, vk4, vk5;
             int x1, y1, k1;
 			
-			//for(x1 = 0; x1 < 12; ++x1)
-			//{
-			//	Sij[x1] = 0;
-			//}
 			vs1 = simd_set_floatv4(0., 0., 0., 0.);
 			vs2 = simd_set_floatv4(0., 0., 0., 0.);
 			vs3 = simd_set_floatv4(0., 0., 0., 0.);
+            #pragma unroll[19]
 			for(k1 = 0; k1 < 19; k1++) {
 				float tmp = (s_step_current_line[sis * 19 + k1] - feq[k1]);
 				// float tmp = (a_current_line[k1] - feq[k1]);
@@ -317,91 +306,54 @@ void s_collide_step(int st, int ed)
 				vs1 = vk1 * ve + vs1;
 				vs2 = vk2 * ve + vs2;
 				vs3 = vk3 * ve + vs3;
-				
-				//for(x1 = 0; x1 < 3; x1++) {
-				//	simd_load(vsij, &(Sij[x1 * 4]));
-				//	vsij = (tmp * s_e_T[k1][x1]) * ve + vsij;
-				//	simd_store(vsij, &(Sij[x1 * 4]));
-					//Sij[x1 * 3 + 0] += s_e_T[k1][x1] * s_e_T[k1][0] * tmp;
-					//Sij[x1 * 3 + 1] += s_e_T[k1][x1] * s_e_T[k1][1] * tmp;
-					//Sij[x1 * 3 + 2] += s_e_T[k1][x1] * s_e_T[k1][2] * tmp;
-                //}
             }
 			simd_store(vs1, &(Sij[0]));
 			simd_store(vs2, &(Sij[4]));
 			simd_store(vs3, &(Sij[8]));
+
+            //用simd乘加会丢精度，也不会变快
+            Qo=0;
+            #pragma unroll[12]
 			for(x1 = 0; x1 < 12; ++x1)
 			{
 				Qo += Sij[x1] * Sij[x1];
 			}
 
+            // if(my_core == 0 && param.my_id == 5)
+            //     printf("%f\n", Qo);
             param.nu = (2.0 / param.omega - 1.0) / 6.0;
             S = (-param.nu + sqrt(param.nu * param.nu + 18 * param.CSmago * param.CSmago * sqrt(Qo))) / 6.0 / param.CSmago / param.CSmago;
             omegaNew = 1.0 / (3.0 * (param.nu + param.CSmago * param.CSmago * S) + 0.5);
-
-
-			//精度丢失还只快1s，算了算了
-			// a_current_line[19] = 0;
 			
-			// simd_load(vs1, &(a_current_line[0]));
-			// simd_load(vs2, &(a_current_line[4]));
-			// simd_load(vs3, &(a_current_line[8]));
-			// simd_load(vs4, &(a_current_line[12]));
-			// simd_load(vs5, &(a_current_line[16]));
-			
-			// S = (1.0 - omegaNew);
-			
-			// simd_load(vk1, &(feq[0]));
-			// simd_load(vk2, &(feq[4]));
-			// simd_load(vk3, &(feq[8]));
-			// simd_load(vk4, &(feq[12]));
-			// simd_load(vk5, &(feq[16]));
-			
-			
-			// vs1 = S * vs1;
-			// vs2 = S * vs2;
-			// vs3 = S * vs3;
-			// vs4 = S * vs4;
-			// vs5 = S * vs5;
-			
-			// vs1 = omegaNew * vk1 + vs1;
-			// vs2 = omegaNew * vk2 + vs2;
-			// vs3 = omegaNew * vk3 + vs3;
-			// vs4 = omegaNew * vk4 + vs4;
-			// vs5 = omegaNew * vk5 + vs5;
-			
-			// simd_store(vs1, &(a_current_line[0]));
-			// simd_store(vs2, &(a_current_line[4]));
-			// simd_store(vs3, &(a_current_line[8]));
-			// simd_store(vs4, &(a_current_line[12]));
-			// simd_store(vs5, &(a_current_line[16]));
-			
-			
+            //没有必要上simd
+            #pragma unroll[19]
             for (l = 0; l < 19; l++) {
               s_step_current_line[sis * 19 + l] =
                       (1.0 - omegaNew) * s_step_current_line[sis * 19 + l] +
                       omegaNew * feq[l];
             }
-			//for (l = 0; l < 19; l++) {
-            //   a_current_line[l] =
-            //           (1.0 - omegaNew) * a_current_line[l] +
-            //           omegaNew * feq[l];
-            //}
-			// for (l = 0; l < 19; l++) {
-				// s_step_current_line[sis * 19 + l] = a_current_line[l];
-			// }
         }
     }
 }
 
-//TODO !!!!精度丢失严重，需要重写或者debug
+//TODO !!!!修了一些bug，但是精度丢失还是很严重，变快5s
 __thread_local float Qo4[4] __attribute__((aligned(32)));
 __thread_local float S4[4] __attribute__((aligned(32)));
 __thread_local float omegaNew4[4] __attribute__((aligned(32)));
+__thread_local float line4[4] __attribute__((aligned(32)));
+__thread_local float u_x4[4] __attribute__((aligned(32)));
+__thread_local float u_y4[4] __attribute__((aligned(32)));
+__thread_local float u_z4[4] __attribute__((aligned(32)));
+__thread_local float rho4[4] __attribute__((aligned(32)));
+__thread_local float tmp4[4] __attribute__((aligned(32)));
 void s_simd_collide_step()
 {
 	int STEP_SIZE_MAIN = (STEP_SIZE / 4) * 4;
 	
+    floatv4  feqv[19];
+    floatv4  Sijv[9];
+    floatv4  currentv[19];
+
 	floatv4 rho, u_x, u_y, u_z;
 	floatv4 fi;
     floatv4 Qo, omegaNew;
@@ -415,75 +367,83 @@ void s_simd_collide_step()
                 {
                     if(s_step_flags[sis + ii] == S_FLUID || s_step_flags[sis + ii] == S_BOUNCE)
 				    {
-						feq[ii] = s_step_current_line[(sis + ii) * 19 + l];
+						line4[ii] = s_step_current_line[(sis + ii) * 19 + l];
 				    }
                     else
                     {
-                        feq[ii] = 0.1;
+                        line4[ii] = 1.0;
                     }
                 }
-				simd_load(simd_current[l], &(feq[0]));
+				simd_load(currentv[l], &(line4[0]));
             }
 
-            rho = 0.0, u_x = 0.0, u_y = 0.0, u_z = 0.0;
+            rho = simd_set_floatv4(0., 0., 0., 0.);
+            u_x = simd_set_floatv4(0., 0., 0., 0.);
+            u_y = simd_set_floatv4(0., 0., 0., 0.);
+            u_z = simd_set_floatv4(0., 0., 0., 0.);
             for (l = 0; l < 19; l++) {
-				fi = simd_current[l];
+				fi = currentv[l];
                 rho = rho + fi;
                 u_x = s_e_x[l] * fi + u_x;
                 u_y = s_e_y[l] * fi + u_y;
                 u_z = s_e_z[l] * fi + u_z;
             }
 
-            u_x = u_x / rho;
+           	u_x = u_x / rho;
             u_y = u_y / rho;
             u_z = u_z / rho;
 
+            //扩展成普通计算精度更爆炸了，为什么？
             for (l = 0; l < 19; l++) {
                 floatv4 tmp = (s_e_x[l] * u_x + s_e_y[l] * u_y + s_e_z[l] * u_z);
-                simd_feq[l] = s_w[l] * rho * (1.0 -
-                                       (3.0/2.0 * (u_x * u_x + u_y * u_y + u_z * u_z)) +
-                                       (3.0 *     tmp) +
-                                       (9.0/2.0 * tmp * tmp));
+				feqv[l] = s_w[l] * rho * (1.0 -
+					(3.0/2.0 * (u_x * u_x + u_y * u_y + u_z * u_z)) +
+					(3.0 *     tmp) +
+					(9.0/2.0 * tmp * tmp));
             }
 
             floatv4 S;
             int x1, y1, k1;
 			for(x1 = 0; x1 < 9; x1++) {
-				simd_Sij[x1] = 0;
+				Sijv[x1] = simd_set_floatv4(0., 0., 0., 0.);
 			}
 			for(k1 = 0; k1 < 19; k1++) {
-				for(x1 = 0; x1 < 3; x1++) {
-					for(y1 = 0; y1 < 3; y1++) {
-                       simd_Sij[x1 * 3 + y1] = s_e_T[k1][x1] * s_e_T[k1][y1] * (simd_current[k1] - simd_feq[k1]) + simd_Sij[x1 * 3 + y1];
-                    }
+				for(x1 = 0; x1 < 3; x1++) for(y1 = 0; y1 < 3; y1++) {
+                    Sijv[x1 * 3 + y1] = s_e_T[k1][x1] * s_e_T[k1][y1] * (currentv[k1] - feqv[k1]) + Sijv[x1 * 3 + y1];
 				}
             }
-            Qo=0.0;
+
+            Qo = simd_set_floatv4(0., 0., 0., 0.);
 			for(x1 = 0; x1 < 9; x1++) {
-				Qo = simd_Sij[x1] * simd_Sij[x1] + Qo;
+				Qo = Sijv[x1] * Sijv[x1] + Qo;
 			}
 			
-            simd_store(Qo, &Qo4[0]);
+            //展开了一下，但是帮助不大
+            simd_store(Qo, &(Qo4[0]));
             param.nu = (2.0 / param.omega - 1.0) / 6.0;
-            #pragma unroll[4]
             for(ii = 0; ii < 4; ii++)
             {
+                // if(s_step_flags[sis + ii] == S_FLUID || s_step_flags[sis + ii] == S_BOUNCE)
+				// {
+                //     if(my_core == 0 && param.my_id == 5)
+                //         printf("%f\n", Qo4[ii]);
+                // }
                 S4[ii] = (-param.nu + sqrt(param.nu * param.nu + 18 * param.CSmago * param.CSmago * sqrt(Qo4[ii]))) / 6.0 / param.CSmago / param.CSmago;
 				omegaNew4[ii] = 1.0 / (3.0 * (param.nu + param.CSmago * param.CSmago * S4[ii]) + 0.5);
             }
-            simd_load(omegaNew, &omegaNew4[0]);
+            simd_load(omegaNew, &(omegaNew4[0]));
             
             for (l = 0; l < 19; l++) {
-				simd_feq[l] = (1.0-omegaNew) * simd_current[k1] + omegaNew * simd_feq[l];
+				currentv[l] = (1.0 - omegaNew) * currentv[l] + omegaNew * feqv[l];
             }
 			
 			for (l = 0; l < 19; l++) {
-				simd_store(simd_feq[l], &(feq[0]));
+				simd_store(currentv[l], &(line4[0]));
 				for(x1 = 0; x1 < 4; ++x1)
 				{
 					if(s_step_flags[sis + x1] == S_FLUID || s_step_flags[sis + x1] == S_BOUNCE)
 					{
-						s_step_current_line[(sis + x1) * 19 + l] = feq[x1];
+						s_step_current_line[(sis + x1) * 19 + l] = line4[x1];
 					}
 				}
 			}
@@ -559,8 +519,8 @@ void s_stream_and_collide_xy(int nz,
         edpf(CPF1_STREAM);
         
         stpf();
-        s_simd_collide_step();
-        //s_collide_step(0, STEP_SIZE);
+        //s_simd_collide_step();
+        s_collide_step(0, STEP_SIZE);
         edpf(CPF1_COLLIDE);
 
         stpf();
