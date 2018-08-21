@@ -3,7 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-int _my_rank, _comm_sz;
+int my_rank, comm_sz;
 
 //hch intel timer
 #define MAX_HCH_TIMER_LEN 256
@@ -43,8 +43,8 @@ HCH_CC_TYPE hch_tmp_cc[MAX_HCH_TIMER_LEN];
 
 void hch_timer_init_()
 {
-    MPI_Comm_rank(MPI_COMM_WORLD, &_my_rank);
-    MPI_Comm_size(MPI_COMM_WORLD, &_comm_sz);
+    MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+    MPI_Comm_size(MPI_COMM_WORLD, &comm_sz);
 
     int i;
     for(i = 0; i < MAX_HCH_TIMER_LEN; i++)
@@ -53,30 +53,69 @@ void hch_timer_init_()
 
 //hch intel timer
 
-void hch_timer_finalize_()
+void hch_timer_manual(long* arr, int cnt, const char* fname, const char* header)
 {
-    if(_my_rank == 0)
+    if(my_rank == 0)
     {
-        printf("hch_timer_finalize_\n");
         FILE * fp;
-        fp = fopen ("hch_timer_profile.csv", "w");
-        fprintf(fp, "my_rank, bounce_send_init, bounce_communicate, MPI_Wait, bounce_update, steam, collide");
+        fp = fopen (fname, "w");
+        fprintf(fp, header);
         fprintf(fp, "\n");
         fflush(fp);
         fclose(fp);
     }
     MPI_Barrier(MPI_COMM_WORLD);
     int i, j, k;
-    for(i = 0; i < _comm_sz; i++)
+    for(i = 0; i < comm_sz; i++)
     {
-        if(_my_rank == i)
+        if(my_rank == i)
+        {
+            FILE * fp;
+
+            fp = fopen (fname, "a");
+
+            fprintf(fp, "%d,", my_rank);
+
+            for(j = 0; j < cnt; j++)
+            {
+                fprintf(fp, "%.4f,", arr[j] * 1.0 / CCPS);
+            }
+
+            fprintf(fp, "\n");
+
+            fflush(fp);
+            fclose(fp);
+
+            fflush(stdout);
+        }
+        MPI_Barrier(MPI_COMM_WORLD);
+    }
+}
+
+void hch_timer_finalize_()
+{
+    if(my_rank == 0)
+    {
+        printf("hch_timer_finalize_\n");
+        FILE * fp;
+        fp = fopen ("hch_timer_profile.csv", "w");
+        fprintf(fp, "my_rank, MPF1_SEND_INIT, MPF1_COMM, MPF1_WAIT_MPI, MPF1_UPDATE, MPF1_WAIT_INNER, MPF1_HALO");
+        fprintf(fp, "\n");
+        fflush(fp);
+        fclose(fp);
+    }
+    MPI_Barrier(MPI_COMM_WORLD);
+    int i, j, k;
+    for(i = 0; i < comm_sz; i++)
+    {
+        if(my_rank == i)
         {
             FILE * fp;
 
             fp = fopen ("hch_timer_profile.csv", "a");
 
-            printf("%d,", _my_rank);
-            fprintf(fp, "%d,", _my_rank);
+            // printf("%d,", my_rank);
+            fprintf(fp, "%d,", my_rank);
 
             #ifndef HCH_TIMER_CNT
             for(j = 0; j < MAX_HCH_TIMER_LEN; j++)
@@ -108,26 +147,26 @@ void hch_timer_finalize_()
 
 void hch_timer_start(int num)
 {
-    //printf("_my_rank = %d, num = %d\n", _my_rank, *num);
+    //printf("my_rank = %d, num = %d\n", my_rank, *num);
     hch_tmp_cc[num] = (HCH_CC_TYPE)GetCycleCount();
 }
 
 void hch_timer_stop(int num)
 {
-    //printf("_my_rank = %d, num = %d\n", _my_rank, *num);
+    //printf("my_rank = %d, num = %d\n", my_rank, *num);
 
     hch_cc[num] += (HCH_CC_TYPE)GetCycleCount() - hch_tmp_cc[num];
 }
 
 void hch_timer_start_(int* num)
 {
-    //printf("_my_rank = %d, num = %d\n", _my_rank, *num);
+    //printf("my_rank = %d, num = %d\n", my_rank, *num);
     hch_tmp_cc[*num] = (HCH_CC_TYPE)GetCycleCount();
 }
 
 void hch_timer_stop_(int* num)
 {
-    //printf("_my_rank = %d, num = %d\n", _my_rank, *num);
+    //printf("my_rank = %d, num = %d\n", my_rank, *num);
 
     hch_cc[*num] += (HCH_CC_TYPE)GetCycleCount() - hch_tmp_cc[*num];
 }

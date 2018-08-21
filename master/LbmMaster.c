@@ -1,5 +1,64 @@
 #include "../header/LbmMaster.h"
 
+volatile long host_flag[FLAG_SIZE];
+volatile long slave_flag[FLAG_SIZE];
+volatile long local_cc[FLAG_SIZE];
+volatile long flag_to_wait;
+unsigned long mpe_cc_cur_[100];
+unsigned long mpe_cc_total_[100];
+int my_rank, comm_sz;
+
+
+void wait_slave_flag()
+{
+    while(slave_flag[0] < flag_to_wait);
+    flag_to_wait++;
+}
+
+void terminate_athread_daemon()
+{
+    host_flag[MPI_RANK] = my_rank;
+    host_flag[KERNEL_ACTION] = EXIT_FLAG;
+    asm volatile ("#nop":::"memory");
+    host_flag[0] = host_flag[0] + 1;
+    wait_slave_flag();
+    wait_slave_flag();
+
+    athread_join();
+}
+
+void athread_handshake()
+{
+    host_flag[MPI_RANK] = my_rank;
+    host_flag[KERNEL_ACTION] = HANDSHAKE_FLAG;
+    asm volatile ("#nop":::"memory");
+    host_flag[0] = host_flag[0] + 1;
+    wait_slave_flag();
+}
+
+
+//ori data
+int X, Y, Z, Xst, Xed, Yst, Yed, x_sec, y_sec;
+int STEPS;
+realt *****ori_nodes;
+int ***ori_flags, ****ori_walls;
+Real ***right_recv;
+Real ***left_recv;
+Real ***down_recv;
+Real ***up_recv;
+Real ***right_send;
+Real ***left_send;
+Real ***down_send;
+Real ***up_send;
+Real **lu_recv;
+Real **ld_recv;
+Real **ru_recv;
+Real **rd_recv;
+Real **lu_send;
+Real **ld_send;
+Real **ru_send;
+Real **rd_send;
+
 //new data
 
 int halo_point_cnt;
@@ -12,16 +71,17 @@ int *halo_point_ns, *inner_point_ns;
 Real* new_nodes;
 int* new_flags, *new_walls;
 
-lbm_param host_param;
+struct lbm_init_param host_param;
 
 // analyse
+
 extern void hch_timer_start(int num);
 extern void hch_timer_stop(int num);
+extern void hch_timer_manual(long* arr, int cnt, const char* fname, const char* header);
 
 #define nodes_idx(d1, d2, d3, d4, d5) (((((d1) * (x_sec + 2) + (d2)) * (y_sec + 2) + (d3)) * Z + (d4)) * 19 + (d5))
 #define flags_idx(d2, d3, d4) (((d2) * (y_sec + 2) + (d3)) * Z + (d4))
 #define walls_idx(d2, d3, d4, d5) ((((d2) * y_sec + (d3)) * Z + (d4)) * 19 + (d5))
-
 
 //faker
 
@@ -149,7 +209,7 @@ void stream_and_collide_xy(int nz,
         memcpy(fk_step_walls, walls + k * 19, sizeof(int) * STEP_SIZE * 19);
         memcpy(fk_step_current_line, current_line + k * 19, sizeof(Real) * STEP_SIZE * 19);
 
-        memcpy(fk_step_current_line_read, fk_step_current_line, sizeof(Real) * STEP_SIZE * 19);
+        memcpy(fk_step_current_line_read, fk_step_current_line, sizeof(realt) * STEP_SIZE * 19);
 
         k = cur_step * STEP_SIZE;
         int z_st = k - 1, z_ed = k + STEP_SIZE;
@@ -227,7 +287,7 @@ void fake_core_func()
     }
 }
 
-void stream_and_collide_inner(int Xst,
+void stream_and_collide_inner_nowait(int Xst,
                               int Xed,
                               int Yst,
                               int Yed,
@@ -253,11 +313,63 @@ void stream_and_collide_inner(int Xst,
     //调用从核计算
     asm volatile ("nop":::"memory");
     host_flag[0] = host_flag[0] + 1;
-    wait_slave_flag();
-    athread_handshake();
+    // wait_slave_flag();
+    // asm volatile ("nop":::"memory");
+    // athread_handshake();
+    // asm volatile ("nop":::"memory");
 
     //主核emulator
     // fake_core_func();
+}
+
+void stream_and_collide_halo(int Xst,
+                              int Xed,
+                              int Yst,
+                              int Yed,
+                              int nz,
+                              int current,
+                              int other)
+{
+    int i, j, k, l;
+    int inv;
+
+    Real rho, u_x, u_y, u_z;
+    Real fi;
+    Real feq[19], Qo, omegaNew;
+
+    host_flag[MPI_RANK] = my_rank;
+    host_flag[KERNEL_ACTION] = STD_LBM_FLAG;
+    host_flag[STD_POINT_CNT] = halo_point_cnt;
+    host_flag[STD_XS_PTR] = (long)halo_point_xs;
+    host_flag[STD_YS_PTR] = (long)halo_point_ys;
+    host_flag[STD_CURRENT_HEAD] = (long)(new_nodes + nodes_idx(current, 0, 0, 0, 0));
+    host_flag[STD_OTHER_HEAD] = (long)(new_nodes + nodes_idx(other, 0, 0, 0, 0));
+
+    //调用从核计算
+    asm volatile ("nop":::"memory");
+    host_flag[0] = host_flag[0] + 1;
+    wait_slave_flag();
+    // asm volatile ("nop":::"memory");
+    // athread_handshake();
+    // asm volatile ("nop":::"memory");
+
+    //主核emulator
+    // fake_core_func();
+}
+
+void halo_point_collect(int xs, int xe, int ys, int ye)
+{
+    int x, y;
+    for(x = xs; x <= xe; x++)
+    {
+        for(y = ys; y <= ye; y++)
+        {
+            halo_point_xs[halo_point_cnt] = x;
+            halo_point_ys[halo_point_cnt] = y;
+            halo_point_ns[halo_point_cnt] = x * (y_sec + 2) + y;
+            halo_point_cnt++;
+        }
+    }
 }
 
 void inner_point_collect(int xs, int xe, int ys, int ye)
@@ -276,12 +388,23 @@ void inner_point_collect(int xs, int xe, int ys, int ye)
 }
 
 void lbm_data_init(int _X, int _Y, int _Z, int _Xst, int _Xed, int _Yst, int _Yed, int _x_sec, int _y_sec,
-                   Real *****_ori_nodes, int ***_ori_flags, int ****_ori_walls, int _STEPS,
+                   realt *****_ori_nodes, int ***_ori_flags, int ****_ori_walls, int _STEPS,
                    Real ***_temp_right, Real ***_temp_left, Real ***_temp_down, Real ***_temp_up,
                    Real ***_temp_right_send, Real ***_temp_left_send, Real ***_temp_down_send, Real ***_temp_up_send,
                    Real **_temp_lu, Real **_temp_ld, Real **_temp_ru, Real **_temp_rd,
                    Real **_temp_lu_send, Real **_temp_ld_send, Real **_temp_ru_send, Real **_temp_rd_send)
 {
+    //非常重要！！！
+    //忘了加这一段，这才是各种玄学出错的根本原因
+
+    int i;
+    for(i = 0; i < FLAG_SIZE; i++)
+    {
+        host_flag[i] = 0;
+        slave_flag[i] = 0;
+    }
+    flag_to_wait = 1;
+
     long stcc, edcc;
     stcc = rpcc();
 
@@ -339,11 +462,18 @@ void lbm_data_init(int _X, int _Y, int _Z, int _Xst, int _Xed, int _Yst, int _Ye
 
     assert(halo_point_xs && halo_point_ys && halo_point_ns && inner_point_xs && inner_point_ys && inner_point_ns);
 
-    inner_point_collect(1, x_sec, 1, y_sec);//initial version, inner is all
+    // inner_point_collect(1, x_sec, 1, y_sec);
+
+    inner_point_collect(1 + 2, x_sec - 2, 1 + 2, y_sec - 2);
+
+    halo_point_collect(1, x_sec, 1, 2);
+    halo_point_collect(1, 2, 1 + 2, y_sec - 2);
+    halo_point_collect(x_sec - 1, x_sec, 1 + 2, y_sec - 2);
+    halo_point_collect(1, x_sec, y_sec - 1, y_sec);
 
     MPI_Barrier(MPI_COMM_WORLD);
 
-    host_param.master_id = my_rank;
+    host_param.my_id = my_rank;
     host_param.host_flag = (long*)&host_flag[0];
     host_param.slave_flag = (long*)&slave_flag[0];
     host_param.iter = STEPS;
@@ -417,8 +547,10 @@ void main_iter(int* _s)
         if(my_rank == 0)
             printf("for(s = 0; s < STEPS; s++) s = %d\n", *_s);
 
+        stream_and_collide_inner_nowait(Xst, Xed, Yst, Yed, Z, current, other);
+
         //send init
-        hch_timer_start(0);
+        hch_timer_start(MPF1_SEND_INIT);
         bounce_send_init(X,
                          Y,
                          Z,
@@ -439,10 +571,10 @@ void main_iter(int* _s)
                          lu_send,
                          rd_send,
                          ru_send);
-        hch_timer_stop(0);
+        hch_timer_stop(MPF1_SEND_INIT);
 
         //comm
-        hch_timer_start(1);
+        hch_timer_start(MPF1_COMM);
         bounce_communicate(MPI_COMM_WORLD,
                            NULL,
                            NULL,
@@ -468,17 +600,17 @@ void main_iter(int* _s)
                            ld_recv,
                            ru_recv,
                            rd_recv );
-        hch_timer_stop(1);
+        hch_timer_stop(MPF1_COMM);
 
 
         //waitall and update
-        hch_timer_start(2);
+        hch_timer_start(MPF1_WAIT_MPI);
         for(i = 0; i < wait_cnt; i++) {
             MPI_Wait(&req[i], &sta[i]);
         }
-        hch_timer_stop(2);
+        hch_timer_stop(MPF1_WAIT_MPI);
 
-        hch_timer_start(3);
+        hch_timer_start(MPF1_UPDATE);
         bounce_update(X,
                       Y,
                       Z,
@@ -499,23 +631,17 @@ void main_iter(int* _s)
                       lu_recv,
                       rd_recv,
                       ru_recv);
-        hch_timer_stop(3);
+        hch_timer_stop(MPF1_UPDATE);
+
+        hch_timer_start(MPF1_WAIT_INNER);
+        wait_slave_flag();
+        hch_timer_stop(MPF1_WAIT_INNER);
 
         //stream and collide
-        hch_timer_start(4);
-        stream_and_collide_inner(Xst, Xed, Yst, Yed, Z, current, other);
+        hch_timer_start(MPF1_HALO);
+        stream_and_collide_halo(Xst, Xed, Yst, Yed, Z, current, other);
+        hch_timer_stop(MPF1_HALO);
         // stream_and_collide_inner(Z, current, other);
-
-        hch_timer_stop(4);
-
-        //        if(*_s == 0)
-        //        {
-        //            int rank;
-        //            for(rank = 0; rank < comm_sz; rank++)
-        //            {
-        //                MPI_Barrier(MPI_COMM_WORLD);
-        //            }
-        //        }
 
 
         other = current;
@@ -523,6 +649,8 @@ void main_iter(int* _s)
     }
 
     terminate_athread_daemon();
+
+    hch_timer_manual(&slave_flag[1], 6, "cpe_pf.csv", "my_rank, CPF1_WAIT, CPF1_READ1, CPF1_READ2, CPF1_STREAM, CPF1_COLLIDE, CPF1_WRITE");
 
     int x, y;
     for(x = 0; x < 3; x++)
@@ -543,32 +671,4 @@ void main_iter(int* _s)
     {
         printf("total time of main_iter is %f\n", ttt);
     }
-}
-
-
-void terminate_athread_daemon()
-{
-    host_flag[MPI_RANK] = my_rank;
-    host_flag[KERNEL_ACTION] = EXIT_FLAG;
-    asm volatile ("nop":::"memory");
-    host_flag[0] = host_flag[0] + 1;
-    wait_slave_flag();
-    wait_slave_flag();
-
-    athread_join();
-}
-
-void wait_slave_flag()
-{
-    while(slave_flag[0] < flag_to_wait);
-    flag_to_wait++;
-}
-
-void athread_handshake()
-{
-    host_flag[MPI_RANK] = my_rank;
-    host_flag[KERNEL_ACTION] = HANDSHAKE_FLAG;
-    asm volatile ("#nop":::"memory");
-    host_flag[0] = host_flag[0] + 1;
-    wait_slave_flag();
 }

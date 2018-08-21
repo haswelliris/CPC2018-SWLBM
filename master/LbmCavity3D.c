@@ -2,9 +2,10 @@
 #include <stdlib.h>
 #include <math.h>
 #include <mpi.h>
-
+#include <stdio.h>
+#include <float.h>
 #include "../header/Argument.h"
-#include "../header/Array.h"
+#include "../header/LbmMaster.h"
 
 int main(int argc, char *argv[])                                       
 {                                                                      
@@ -106,14 +107,17 @@ int main(int argc, char *argv[])
     	x_sec = Xed - Xst;
     	y_sec = Yed - Yst;
 	
-    //OLOG(myrank, "Task:\tX=[%d~%d],\tY=[%d~%d]\n", Xst, Xed, Yst, Yed);
-	//Size of range for each MPI process is 250 x 125 x 500
 
 	/*-----------------------------*
          *-----------------------------* 
          * ----------------------------*/
 	
 	MLOG("Size                 :  %d x %d x %d\n", X, Y, Z);
+
+    //hch
+    // STEPS = 10;
+    //printf("STEPS = %d\n", STEPS);
+
         MLOG("Steps                :  %d\n", STEPS);
         MLOG("Number of Process    :  %d\n\n", size);
 	
@@ -169,26 +173,9 @@ int main(int argc, char *argv[])
 
 	/*----------------------------------------------------*
 	 * Main Calculation section
-	 * ---------------------------------------------------*/
+     * ---------------------------------------------------*/
 	TIME_ST();
 
-        // delete if final submit
-		STEPS = 2;
-
-	/*__iterate__(i,0,x_sec+2) \
-	__iterate__(j,0,y_sec+2) \
-	__iterate__(k,0,Z) \
-	__iterate__(l,0,19) {
-		if(nodes[current][i][j][k][l] == 3455333.53353)
-			MLOG("------------\n");
-	}*/
-	/*for (i = 0; i < x_sec+2; i++)
-		for (j = 0; j < y_sec+2; j++)
-			if (i == 0 || i == x_sec+1 || j == 0 || j == y_sec+1)
-				for (k = 0; k < Z; k++)
-					for (l = 0; l < 19; l++)
-						if (nodes[current][i][j][k][l] == 6.66)
-							MLOG("nothing");*/
     hch_timer_init_();
     lbm_data_init(X, Y, Z, Xst, Xed, Yst, Yed, x_sec, y_sec, nodes, flags, walls, STEPS,
                   temp_right,temp_left,temp_down,temp_up,
@@ -196,17 +183,20 @@ int main(int argc, char *argv[])
                   temp_lu,temp_ld,temp_ru,temp_rd,
                   temp_lu_send,temp_ld_send,temp_ru_send,temp_rd_send);
     main_iter(&s);
-    hch_timer_finalize_();
 
-	TIME_ED();
-	//delete below for final submit
-	//hch_validation field
+    hch_timer_finalize_();
+    TIME_ED();
+
+
+    //hch_validation field
 
     //writing
+
     FILE * outfile, *infile;
 
     char fname[1000];
-    sprintf(fname, "_hch_lbm_val_fine_rank_%02d_STEPS_%d.dat", myrank, STEPS);
+	sprintf(fname, "lbm_steps-%d_dump_rank-%02d.dat", STEPS, myrank);
+    //sprintf(fname, "_hch_lbm_val_fine_rank_%02d_STEPS_%d.dat", myrank, STEPS);
 
     infile = fopen(fname, "rb");
     //both "other" and "current" will be checked
@@ -307,95 +297,7 @@ int main(int argc, char *argv[])
     MPI_Barrier(MPI_COMM_WORLD);
     fflush(stdout);
     MPI_Barrier(MPI_COMM_WORLD);
-	// delete upon for final submit
 
-	/**
-	 *  dump & check
-	 */
-    /*
-	int dump = 0;
-	FILE *outfile, *infile;
-	char fname[100];
-	sprintf(fname, "lbm_steps-%d_dump_rank-%02d.dat", STEPS, myrank);
-
-	if(dump == 1) 
-	{
-		outfile = fopen(fname, "wb");
-		if(outfile == NULL)
-        {
-			MLOG("EMMMM!? cannot write\n");
-		}
-		else
-		{
-			MLOG("Writing\n");
-			int i0, i1, i2, i3;
-            for(i0 = 0; i0 < 2; i0++)
-            {
-                for(i1 = 1; i1 < x_sec + 1; i1++)
-                {
-					i2 = 1;
-                    for(i3 = 0; i3 < Z; i3++)
-                    {
-                        fwrite(nodes[i0][i1][i2][i3], sizeof(Real), 1, outfile);
-                    }
-                }
-            }
-            fclose(outfile);
-		}
-	}
-	else
-	{
-		infile = fopen(fname, "rb");
-		if(infile == NULL) {
-			MLOG("Please dump the data first :3\n");
-		}
-		else
-		{
-			MLOG("Checking\n");
-			if(1)
-			{
-            	Real* dumped = malloc(sizeof(Real) * 2 * (x_sec + 2) * 1 * Z * 1);
-				fread(dumped, sizeof(Real), 2 * (x_sec + 2) * 1 * Z * 1, infile);
-
-				int i0, i1, i2, i3;
-				int iter = 0;
-				for(i0 = 0; i0 < 2; i0++)
-				{
-					for(i1 = 1; i1 < x_sec + 1; i1++)
-					{
-						i2 = 1;
-						for(i3 = 0; i3 < Z; i3++)
-						{
-							if(isnan(dumped[iter]) && isnan(nodes[i0][i1][i2][i3][0]))
-							{
-							}
-							else if(isnan(dumped[iter]))
-							{
-							}
-							else if(isnan(nodes[i0][i1][i2][i3][0]))
-							{
-								OLOG(myrank, "error data at (%d %d %d %d %d)\n", i0, i1, i2, i3, 0);
-								iter = -1;
-								break;
-							}
-							else if(dumped[iter] != nodes[i0][i1][i2][i3][0])
-							{
-								OLOG(myrank, "error data at (%d %d %d %d %d)\n", i0, i1, i2, i3, 0);
-								iter = -1;
-								break;
-							}
-							iter++;
-						}
-						if(iter == -1)
-							break;
-					}
-					if(iter == -1)
-						break;
-				}
-			}
-		}
-	}
-	*/
 
 	/*-----------------------------*
  	 * OUTPUT 
@@ -403,7 +305,8 @@ int main(int argc, char *argv[])
 
 	MLOG("Step >> Main Steps Done!\n\n");
 
-	OUTPUT(X, Y, Z, Xst, Xed, Yst, Yed, s, myrank, size, other, x_sec, y_sec, argv[1], local_image, image, rankinfo, nodes);
+    if(STEPS == 100)
+	   OUTPUT(X, Y, Z, Xst, Xed, Yst, Yed, s, myrank, size, other, x_sec, y_sec, argv[1], local_image, image, rankinfo, nodes);
 
 	arrayFree2DF(image);
 	arrayFree2DI(rankinfo);

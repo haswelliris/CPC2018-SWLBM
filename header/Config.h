@@ -1,11 +1,40 @@
-#ifndef __LBM_Config_H__
-#define __LBM_Config_H__
+#ifndef __Config_H__
+#define __Config_H__
 
-#define FLAG_SIZE 32
+#define CCPS 1450000000
 
-enum flag_idx {
-    F_RANK = 0,
-    F_ACT = 1
-};
+#define realt float
+#define mpi_realt MPI_FLOAT
+#define lbm_flag_type int
+
+//CPF* 从核 profile 嵌套第*层
+#define CPF1_WAIT          1
+#define CPF1_READ1         2
+#define CPF1_READ2         3
+#define CPF1_STREAM        4
+#define CPF1_COLLIDE       5
+#define CPF1_WRITE         6
+
+//MPF* 主核 profile 嵌套第*层
+//使用hch_timer
+#define MPF1_SEND_INIT     0
+#define MPF1_COMM          1
+#define MPF1_WAIT_MPI      2
+#define MPF1_UPDATE        3
+#define MPF1_WAIT_INNER    4
+#define MPF1_HALO          5
+
+//please make sure that 在这一层计时，没有互相嵌套的
+//防止RPCC调用开销带来的系统误差
+//#define PF_INITIAL_TRANSFER 1
+//#define PF_EVV              2
+//#define PF_CFFTS_COPY       3
+//#define PF_CFFTZ_COPY       4
+//#define PF_FFTZ2            5
+//#define PF_TP1              6
+//#define PF_TP2              7
+//#define PF_CHK              8
+
+
 
 #endif
