@@ -208,8 +208,6 @@ __thread_local realt s_e_T[19][4] __attribute__((aligned(32))) = {
 	{0.,-1.,1.,0.}, {0.,-1.,-1.,0.}, {1.,0.,1.,0.}, {1.,0.,-1.,0.}, {-1.,0.,1.,0.}, {-1.,0.,-1.,0.}, {0.,0.,0.,0.}
 };
 __thread_local int s_dfInv[19] __attribute__((aligned(32))) = {1, 0, 3, 2, 5, 4, 9, 8, 7, 6, 13, 12, 11, 10, 17, 16, 15, 14, 18};
-__thread_local realt  Sij[12] __attribute__((aligned(32)));
-__thread_local realt  feq[20] __attribute__((aligned(32)));
 // __thread_local realt  a_current_line[20] __attribute__((aligned(32)));
 
 void s_stream_step()
@@ -248,90 +246,127 @@ void s_stream_step()
 	}
 }
 
+__thread_local realt  Sij[12] __attribute__((aligned(32)));
+__thread_local realt  feq[20] __attribute__((aligned(32)));
+__thread_local realt  res[20] __attribute__((aligned(32)));
+__thread_local    realt _prho, _pu_x, _pu_y, _pu_z;
+__thread_local    realt _pfi;
+__thread_local    realt _pQo, _pomegaNew;
+__thread_local    int _psis, _pl;
+__thread_local    realt _ptmp;
+__thread_local    realt _pS;
+__thread_local	  floatv4 _pvs1, _pvs2, _pvs3,_pve, _pvk1, _pvk2, _pvk3, _pvk4, _pvk5;
+__thread_local    int _px1, _py1, _pk1;
+__thread_local    floatv4 _pU, _pE;
+
+s_collide_step_a() {
+
+}
+
+s_collide_step_b() {
+    _pU = simd_set_floatv4(0., 0., 0., 0.), _pE;
+    #pragma unroll[19]
+    for (_pl = 0; _pl < 19; _pl++) {
+		// fi = a_current_line[l];
+		_pfi = s_step_current_line[_psis * 19 + _pl];
+		_pE = simd_set_floatv4(1., s_e_T[_pl][0], s_e_T[_pl][1], s_e_T[_pl][2]);
+		_pU = _pfi * _pE + _pU;
+    }
+	simd_store(_pU, &(Sij[0]));
+	_prho = Sij[0], _pu_x = Sij[1], _pu_y = Sij[2], _pu_z = Sij[3];
+}
+
+s_collide_step_c() {
+    _pu_x /= _prho;
+    _pu_y /= _prho;
+    _pu_z /= _prho;
+}
+
+s_collide_step_d() {
+    //用simd会丢精度, 但是会快(2/100)s/次
+    #pragma unroll[19]
+    for (_pl = 0; _pl < 19; _pl++) {
+        _ptmp = (s_e_x[_pl] * _pu_x + s_e_y[_pl] * _pu_y + s_e_z[_pl] * _pu_z);
+        feq[_pl] = s_w[_pl] * _prho * (1.0 -
+                               (3.0/2.0 * (_pu_x * _pu_x + _pu_y * _pu_y + _pu_z * _pu_z)) +
+                               (3.0 *     _ptmp) +
+                               (9.0/2.0 * _ptmp * _ptmp));
+    }
+}
+
+s_collide_step_e() {
+    _pvs1 = simd_set_floatv4(0., 0., 0., 0.);
+	_pvs2 = simd_set_floatv4(0., 0., 0., 0.);
+	_pvs3 = simd_set_floatv4(0., 0., 0., 0.);
+    #pragma unroll[19]
+	for(_pk1 = 0; _pk1 < 19; _pk1++) {
+		_ptmp = (s_step_current_line[_psis * 19 + _pk1] - feq[_pk1]);
+		// float tmp = (a_current_line[k1] - feq[k1]);
+		simd_load(_pve, &(s_e_T[_pk1][0]));
+		_pvk1 = _ptmp * s_e_T[_pk1][0];
+		_pvk2 = _ptmp * s_e_T[_pk1][1];
+		_pvk3 = _ptmp * s_e_T[_pk1][2];
+				
+		_pvs1 = _pvk1 * _pve + _pvs1;
+		_pvs2 = _pvk2 * _pve + _pvs2;
+		_pvs3 = _pvk3 * _pve + _pvs3;
+    }
+	simd_store(_pvs1, &(Sij[0]));
+	simd_store(_pvs2, &(Sij[4]));
+	simd_store(_pvs3, &(Sij[8]));
+}
+
+s_collide_step_f() {
+    //用simd乘加会丢精度，也不会变快
+    _pQo=0;
+    #pragma unroll[12]
+	for(_px1 = 0; _px1 < 12; ++_px1)
+	{
+		_pQo += Sij[_px1] * Sij[_px1];
+	}
+}
+
+s_collide_step_g() {
+    param.nu = (2.0 / param.omega - 1.0) / 6.0;
+    _pS = (-param.nu + sqrt(param.nu * param.nu + 18 * param.CSmago * param.CSmago * sqrt(_pQo))) / 6.0 / param.CSmago / param.CSmago;
+    _pomegaNew = 1.0 / (3.0 * (param.nu + param.CSmago * param.CSmago * _pS) + 0.5);
+}
+
+s_collide_step_h() {
+    //没有必要上simd
+    #pragma unroll[19]
+    for (_pl = 0; _pl < 19; _pl++) {
+        res[_pl] =
+              (1.0 - _pomegaNew) * s_step_current_line[_psis * 19 + _pl] +
+              _pomegaNew * feq[_pl];
+    }
+}
+
+s_collide_step_i() {
+    //没有必要上simd
+    #pragma unroll[19]
+    for (_pl = 0; _pl < 19; _pl++) {
+        s_step_current_line[_psis * 19 + _pl] = res[_pl];
+    }
+}
+
 //半SIMD化
 void s_collide_step(int st, int ed)
 {
-	realt rho, u_x, u_y, u_z;
-    realt fi;
-    realt Qo, omegaNew;
-	
-	int sis, l;
 	//coli
-	for(sis = st; sis < ed; sis++)
+	for(_psis = st; _psis < ed; _psis++)
     {
-        if(s_step_flags[sis] == S_FLUID || s_step_flags[sis] == S_BOUNCE)
+        if(s_step_flags[_psis] == S_FLUID || s_step_flags[_psis] == S_BOUNCE)
         {
-            //rho = 0.0, u_x = 0.0, u_y = 0.0, u_z = 0.0;
-			floatv4 U = simd_set_floatv4(0., 0., 0., 0.), E;
-            #pragma unroll[19]
-            for (l = 0; l < 19; l++) {
-				// fi = a_current_line[l];
-				fi = s_step_current_line[sis * 19 + l];
-				E = simd_set_floatv4(1., s_e_T[l][0], s_e_T[l][1], s_e_T[l][2]);
-				U = fi * E + U;
-            }
-			simd_store(U, &(Sij[0]));
-			rho = Sij[0], u_x = Sij[1], u_y = Sij[2], u_z = Sij[3];
-			
-            u_x /= rho;
-            u_y /= rho;
-            u_z /= rho;
-
-            //用simd会丢精度, 但是会快(2/100)s/次
-            #pragma unroll[19]
-            for (l = 0; l < 19; l++) {
-                const realt tmp = (s_e_x[l] * u_x + s_e_y[l] * u_y + s_e_z[l] * u_z);
-                feq[l] = s_w[l] * rho * (1.0 -
-                                       (3.0/2.0 * (u_x * u_x + u_y * u_y + u_z * u_z)) +
-                                       (3.0 *     tmp) +
-                                       (9.0/2.0 * tmp * tmp));
-            }
-
-            realt S;
-			floatv4 vs1, vs2, vs3, vs4, vs5 ,ve, vk1, vk2, vk3, vk4, vk5;
-            int x1, y1, k1;
-			
-			vs1 = simd_set_floatv4(0., 0., 0., 0.);
-			vs2 = simd_set_floatv4(0., 0., 0., 0.);
-			vs3 = simd_set_floatv4(0., 0., 0., 0.);
-            #pragma unroll[19]
-			for(k1 = 0; k1 < 19; k1++) {
-				float tmp = (s_step_current_line[sis * 19 + k1] - feq[k1]);
-				// float tmp = (a_current_line[k1] - feq[k1]);
-				simd_load(ve, &(s_e_T[k1][0]));
-				vk1 = tmp * s_e_T[k1][0];
-				vk2 = tmp * s_e_T[k1][1];
-				vk3 = tmp * s_e_T[k1][2];
-				
-				vs1 = vk1 * ve + vs1;
-				vs2 = vk2 * ve + vs2;
-				vs3 = vk3 * ve + vs3;
-            }
-			simd_store(vs1, &(Sij[0]));
-			simd_store(vs2, &(Sij[4]));
-			simd_store(vs3, &(Sij[8]));
-
-            //用simd乘加会丢精度，也不会变快
-            Qo=0;
-            #pragma unroll[12]
-			for(x1 = 0; x1 < 12; ++x1)
-			{
-				Qo += Sij[x1] * Sij[x1];
-			}
-
-            // if(my_core == 0 && param.my_id == 5)
-            //     printf("%f\n", Qo);
-            param.nu = (2.0 / param.omega - 1.0) / 6.0;
-            S = (-param.nu + sqrt(param.nu * param.nu + 18 * param.CSmago * param.CSmago * sqrt(Qo))) / 6.0 / param.CSmago / param.CSmago;
-            omegaNew = 1.0 / (3.0 * (param.nu + param.CSmago * param.CSmago * S) + 0.5);
-			
-            //没有必要上simd
-            #pragma unroll[19]
-            for (l = 0; l < 19; l++) {
-              s_step_current_line[sis * 19 + l] =
-                      (1.0 - omegaNew) * s_step_current_line[sis * 19 + l] +
-                      omegaNew * feq[l];
-            }
+            s_collide_step_a();
+            s_collide_step_b();
+            s_collide_step_c();
+            s_collide_step_d();
+            s_collide_step_e();
+            s_collide_step_f();
+            s_collide_step_g();
+            s_collide_step_h();
+            s_collide_step_i();
         }
     }
 }
@@ -346,108 +381,142 @@ __thread_local float u_y4[4] __attribute__((aligned(32)));
 __thread_local float u_z4[4] __attribute__((aligned(32)));
 __thread_local float rho4[4] __attribute__((aligned(32)));
 __thread_local float tmp4[4] __attribute__((aligned(32)));
+
+#define STEP_SIZE_MAIN ((STEP_SIZE / 4) * 4)
+
+__thread_local    floatv4  _vpfeqv[19];
+__thread_local    floatv4  _vpSijv[9];
+__thread_local    floatv4  _vpcurrentv[19];
+__thread_local
+__thread_local    floatv4 _vprho, _vpu_x, _vpu_y, _vpu_z;
+__thread_local	  floatv4 _vpfi;
+__thread_local    floatv4 _vpQo, _vpomegaNew;
+__thread_local	  int _vpsis, _vpl, _vpii;
+__thread_local    floatv4 _vptmp;
+__thread_local    floatv4 _vpS;
+__thread_local    int _vpx1, _vpy1, _vpk1;
+
+void s_simd_collide_step_a()
+{
+    for (_vpl = 0; _vpl < 19; _vpl++) {
+        for(_vpii = 0; _vpii < 4; ++_vpii)
+        {
+            if(s_step_flags[_vpsis + _vpii] == S_FLUID || s_step_flags[_vpsis + _vpii] == S_BOUNCE)
+			{
+				line4[_vpii] = s_step_current_line[(_vpsis + _vpii) * 19 + _vpl];
+			}
+            else
+            {
+                line4[_vpii] = 1.0;
+            }
+        }
+		simd_load(_vpcurrentv[_vpl], &(line4[0]));
+    }
+}
+
+void s_simd_collide_step_b()
+{
+    _vprho = simd_set_floatv4(0., 0., 0., 0.);
+    _vpu_x = simd_set_floatv4(0., 0., 0., 0.);
+    _vpu_y = simd_set_floatv4(0., 0., 0., 0.);
+    _vpu_z = simd_set_floatv4(0., 0., 0., 0.);
+    for (_vpl = 0; _vpl < 19; _vpl++) {
+		_vpfi = _vpcurrentv[_vpl];
+        _vprho = _vprho + _vpfi;
+        _vpu_x = s_e_x[_vpl] * _vpfi + _vpu_x;
+        _vpu_y = s_e_y[_vpl] * _vpfi + _vpu_y;
+        _vpu_z = s_e_z[_vpl] * _vpfi + _vpu_z;
+    }
+}
+
+void s_simd_collide_step_c()
+{
+    _vpu_x = _vpu_x / _vprho;
+    _vpu_y = _vpu_y / _vprho;
+    _vpu_z = _vpu_z / _vprho;
+}
+
+void s_simd_collide_step_d()
+{
+    //扩展成普通计算精度更爆炸了，为什么？
+    for (_vpl = 0; _vpl < 19; _vpl++) {
+        _vptmp = (s_e_x[_vpl] * _vpu_x + s_e_y[_vpl] * _vpu_y + s_e_z[_vpl] * _vpu_z);
+		_vpfeqv[_vpl] = s_w[_vpl] * _prho * (1.0 -
+			(3.0/2.0 * (_vpu_x * _vpu_x + _vpu_y * _vpu_y + _vpu_z * _vpu_z)) +
+			(3.0 *     _vptmp) +
+			(9.0/2.0 * _vptmp * _vptmp));
+    }
+}
+
+void s_simd_collide_step_e()
+{
+    for(_vpx1 = 0; _vpx1 < 9; _vpx1++) {
+		_vpSijv[_vpx1] = simd_set_floatv4(0., 0., 0., 0.);
+	}
+	for(_vpk1 = 0; _vpk1 < 19;_vpk1++) {
+		for(_vpx1 = 0; _vpx1 < 3; _vpx1++) for(_vpy1 = 0; _vpy1 < 3; _vpy1++) {
+            _vpSijv[_vpx1 * 3 + _vpy1] = \
+                s_e_T[_vpk1][_vpx1] * s_e_T[_vpk1][_vpy1] * (_vpcurrentv[_vpk1] - _vpfeqv[_vpk1]) + \
+                _vpSijv[_vpx1 * 3 + _vpy1];
+		}
+    }
+}
+
+void s_simd_collide_step_f()
+{
+    _vpQo = simd_set_floatv4(0., 0., 0., 0.);
+	for(_vpx1 = 0; _vpx1 < 9; _vpx1++) {
+		_vpQo = _vpSijv[_vpx1] * _vpSijv[_vpx1] + _vpQo;
+	}
+}
+
+void s_simd_collide_step_g()
+{
+    simd_store(_vpQo, &(Qo4[0]));
+    param.nu = (2.0 / param.omega - 1.0) / 6.0;
+    for(_vpii = 0; _vpii < 4; _vpii++)
+    {
+        S4[_vpii] = (-param.nu + sqrt(param.nu * param.nu + 18 * param.CSmago * param.CSmago * sqrt(Qo4[_vpii]))) / 6.0 / param.CSmago / param.CSmago;
+		omegaNew4[_vpii] = 1.0 / (3.0 * (param.nu + param.CSmago * param.CSmago * S4[_vpii]) + 0.5);
+    }
+    simd_load(_vpomegaNew, &(omegaNew4[0]));
+}
+
+void s_simd_collide_step_h()
+{
+    for (_vpl = 0; _vpl < 19; _vpl++) {
+		_vpcurrentv[_vpl] = (1.0 - _vpomegaNew) * _vpcurrentv[_vpl] + _vpomegaNew * _vpfeqv[_vpl];
+    }
+}
+
+void s_simd_collide_step_i()
+{
+    for (_vpl = 0; _vpl < 19; _vpl++) {
+		simd_store(_vpcurrentv[_vpl], &(line4[0]));
+		for(_vpx1 = 0; _vpx1 < 4; ++_vpx1)
+		{
+			if(s_step_flags[_vpsis + _vpx1] == S_FLUID || s_step_flags[_vpsis + _vpx1] == S_BOUNCE)
+			{
+				s_step_current_line[(_vpsis + _vpx1) * 19 + _vpl] = line4[_vpx1];
+			}
+		}
+	}
+}
+
 void s_simd_collide_step()
 {
-	int STEP_SIZE_MAIN = (STEP_SIZE / 4) * 4;
 	
-    floatv4  feqv[19];
-    floatv4  Sijv[9];
-    floatv4  currentv[19];
-
-	floatv4 rho, u_x, u_y, u_z;
-	floatv4 fi;
-    floatv4 Qo, omegaNew;
-	int sis, l, ii;
-	for(sis = 0; sis < STEP_SIZE_MAIN; sis+=4)
+	for(_vpsis = 0; _vpsis < STEP_SIZE_MAIN; _vpsis+=4)
     {
-		//if(s_step_flags[sis] == S_FLUID || s_step_flags[sis] == S_BOUNCE)
-        {
-            for (l = 0; l < 19; l++) {
-                for(ii = 0; ii < 4; ++ii)
-                {
-                    if(s_step_flags[sis + ii] == S_FLUID || s_step_flags[sis + ii] == S_BOUNCE)
-				    {
-						line4[ii] = s_step_current_line[(sis + ii) * 19 + l];
-				    }
-                    else
-                    {
-                        line4[ii] = 1.0;
-                    }
-                }
-				simd_load(currentv[l], &(line4[0]));
-            }
-
-            rho = simd_set_floatv4(0., 0., 0., 0.);
-            u_x = simd_set_floatv4(0., 0., 0., 0.);
-            u_y = simd_set_floatv4(0., 0., 0., 0.);
-            u_z = simd_set_floatv4(0., 0., 0., 0.);
-            for (l = 0; l < 19; l++) {
-				fi = currentv[l];
-                rho = rho + fi;
-                u_x = s_e_x[l] * fi + u_x;
-                u_y = s_e_y[l] * fi + u_y;
-                u_z = s_e_z[l] * fi + u_z;
-            }
-
-           	u_x = u_x / rho;
-            u_y = u_y / rho;
-            u_z = u_z / rho;
-
-            //扩展成普通计算精度更爆炸了，为什么？
-            for (l = 0; l < 19; l++) {
-                floatv4 tmp = (s_e_x[l] * u_x + s_e_y[l] * u_y + s_e_z[l] * u_z);
-				feqv[l] = s_w[l] * rho * (1.0 -
-					(3.0/2.0 * (u_x * u_x + u_y * u_y + u_z * u_z)) +
-					(3.0 *     tmp) +
-					(9.0/2.0 * tmp * tmp));
-            }
-
-            floatv4 S;
-            int x1, y1, k1;
-			for(x1 = 0; x1 < 9; x1++) {
-				Sijv[x1] = simd_set_floatv4(0., 0., 0., 0.);
-			}
-			for(k1 = 0; k1 < 19; k1++) {
-				for(x1 = 0; x1 < 3; x1++) for(y1 = 0; y1 < 3; y1++) {
-                    Sijv[x1 * 3 + y1] = s_e_T[k1][x1] * s_e_T[k1][y1] * (currentv[k1] - feqv[k1]) + Sijv[x1 * 3 + y1];
-				}
-            }
-
-            Qo = simd_set_floatv4(0., 0., 0., 0.);
-			for(x1 = 0; x1 < 9; x1++) {
-				Qo = Sijv[x1] * Sijv[x1] + Qo;
-			}
-			
-            //展开了一下，但是帮助不大
-            simd_store(Qo, &(Qo4[0]));
-            param.nu = (2.0 / param.omega - 1.0) / 6.0;
-            for(ii = 0; ii < 4; ii++)
-            {
-                // if(s_step_flags[sis + ii] == S_FLUID || s_step_flags[sis + ii] == S_BOUNCE)
-				// {
-                //     if(my_core == 0 && param.my_id == 5)
-                //         printf("%f\n", Qo4[ii]);
-                // }
-                S4[ii] = (-param.nu + sqrt(param.nu * param.nu + 18 * param.CSmago * param.CSmago * sqrt(Qo4[ii]))) / 6.0 / param.CSmago / param.CSmago;
-				omegaNew4[ii] = 1.0 / (3.0 * (param.nu + param.CSmago * param.CSmago * S4[ii]) + 0.5);
-            }
-            simd_load(omegaNew, &(omegaNew4[0]));
-            
-            for (l = 0; l < 19; l++) {
-				currentv[l] = (1.0 - omegaNew) * currentv[l] + omegaNew * feqv[l];
-            }
-			
-			for (l = 0; l < 19; l++) {
-				simd_store(currentv[l], &(line4[0]));
-				for(x1 = 0; x1 < 4; ++x1)
-				{
-					if(s_step_flags[sis + x1] == S_FLUID || s_step_flags[sis + x1] == S_BOUNCE)
-					{
-						s_step_current_line[(sis + x1) * 19 + l] = line4[x1];
-					}
-				}
-			}
-        }
+        s_simd_collide_step_a();
+        s_simd_collide_step_b();
+        s_simd_collide_step_c();
+        s_simd_collide_step_d();
+        s_simd_collide_step_e();
+        s_simd_collide_step_f();
+        s_simd_collide_step_g();
+        s_simd_collide_step_h();
+        s_simd_collide_step_i();
 	}
 	
 	s_collide_step(STEP_SIZE_MAIN, STEP_SIZE);
