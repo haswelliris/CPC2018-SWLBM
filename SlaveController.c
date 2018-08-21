@@ -22,7 +22,7 @@ __thread_local const int e[19][3] = {
 	{ 1, 0,-1},
 	{-1, 0, 1},
 	{-1, 0,-1},
-	{0, 0, 0,}
+	{ 0, 0, 0}
 };
 
 __thread_local const float ww[19] = {
@@ -32,14 +32,27 @@ __thread_local const float ww[19] = {
 
 __thread_local const int ddfInv[19] = {1, 0, 3, 2, 5, 4, 9, 8, 7, 6, 13, 12, 11, 10, 17, 16, 15, 14, 18};
 
+__thread_local const int tl[9][3] = {
+	{-1,-1, 8},
+	{12,13, 1},
+	{-1,-1, 9},
+	{14,15, 2},
+	{ 4, 5,18},
+	{16,17, 3},
+	{-1,-1, 6},
+	{10,11, 0},
+	{-1,-1, 7}
+};
+
+__thread_local const int tk[3] = {-1, 1, 0};
+
 __thread_local int my_id, my2drank;
 __thread_local int Xst, Xed, Yst, Yed, nz, current, other;
 __thread_local float athread_nu, athread_omega, athread_CSmago;
 __thread_local int ***flags;
 __thread_local int tmp_flags[500];
 __thread_local float *****nodes;
-__thread_local float tmp_nodes[500][19], buffer_nodes[250][19];
-__thread_local int ****walls;
+__thread_local float tmp_nodes[500][19], buffer_nodes[252][19];
 __thread_local int tmp_walls[64][19];
 __thread_local int i, j, k, l, r;
 __thread_local float rho, u_x, u_y, u_z;
@@ -67,7 +80,6 @@ void slaveInit(void* paras) {
 	nz = parameter.nz;
 	flags = parameter.flags;
 	nodes = parameter.nodes;
-	walls = parameter.walls;
 	athread_omega = parameter.omega;
 	athread_CSmago = parameter.CSmago;
 }
@@ -90,46 +102,86 @@ void slaveController(void* paras) {
 	// }
 }
 
-// #define get_mem(from, to, size) { \
-// 	get_reply = 0; \
-// 	athread_get(PE_MODE,from,to,size,&get_reply,0,0,0); \
-// 	while(get_reply != 1); \
-// }
+#define get_mem(from, to, size) { \
+	get_reply = 0; \
+	athread_get(PE_MODE,from,to,size,&get_reply,0,0,0); \
+	while(get_reply != 1); \
+}
 
-// void shift(float *****from, int *tl, int *tk) {
-// 	get_mem(from, &buffer_nodes[0][0], 250*19*sizeof(float));
-// 	for (r = 0; r < 3; r++) {
-// 		for (k = 0; k < 250; k++) {
-// 			if(tmp_flags[k] == FLUID)
-// 				tmp_nodes[k][tl[r]] = buffer_nodes[k+tk[r]][tl[r]];
-// 			if(tmp_flags[k] == BOUNCE) {
-// 				if(walls[i - Xst][j - Yst][k][l])
-// 					tmp_nodes[k][l] = buffer_nodes[k][ddfInv[l]];
-// 				else
-// 					tmp_nodes[k][tl[r]] = buffer_nodes[k+tk[r]][tl[r]];
-// 			}
-// 		}
-// 	}
-// }
+void shift(int x, int y, int tlp) {
+	get_mem(&nodes[other][x][y][0][0], &buffer_nodes[0][0], 252*19*sizeof(float));
+	for (r = 0; r < 3; r++) {
+		if (tl[tlp][r] == -1)
+			continue;
+		for (k = 0; k < 251; k++) {
+			if(tmp_flags[k] & (1<<20))
+				tmp_nodes[k][tl[tlp][r]] = buffer_nodes[k+tk[r]][tl[tlp][r]];
+			if(tmp_flags[k] & (1<<19)) {
+				if(tmp_flags[k] & (1<<tl[tlp][r]))
+					tmp_nodes[k][tl[tlp][r]] = -1;
+				else
+					tmp_nodes[k][tl[tlp][r]] = buffer_nodes[k+tk[r]][tl[tlp][r]];
+			}
+		}
+	}
+	if (tl[tlp][2] == 18) {
+		for (k = 0; k < 251; k++)
+			for (l = 0; l < 19; l++)
+				if (tmp_nodes[k][l] < 0) {
+					tmp_nodes[k][l] = buffer_nodes[k][ddfInv[l]];
+				}
+	}
+
+	get_mem(&nodes[other][x][y][250][0], &buffer_nodes[0][0], 250*19*sizeof(float));
+	for (r = 0; r < 3; r++) {
+		if (tl[tlp][r] == -1)
+			continue;
+		for (k = 251; k < 500; k++) {
+			if(tmp_flags[k] & (1<<20))
+				tmp_nodes[k][tl[tlp][r]] = buffer_nodes[k-250+tk[r]][tl[tlp][r]];
+			if(tmp_flags[k] & (1<<19)) {
+				if(tmp_flags[k] & (1<<tl[tlp][r])) {
+					tmp_nodes[k][tl[tlp][r]] = -1;
+				}
+				else
+					tmp_nodes[k][tl[tlp][r]] = buffer_nodes[k-250+tk[r]][tl[tlp][r]];
+			}
+		}
+	}
+	if (tl[tlp][2] == 18) {
+		for (k = 251; k < 500; k++)
+			for (l = 0; l < 19; l++)
+				if (tmp_nodes[k][l] < 0) {
+					tmp_nodes[k][l] = buffer_nodes[k-250][ddfInv[l]];
+				}
+	}
+}
 
 void SlaveCollide(void* paras) {
 	current = *(int*)paras;
+	other = 1 - current;
 	for(i = Xst+1; i < Xed-1; i++) {
 		for(j = Yst+1; j < Yed-1; j++) {
 			if (((i-Xst-1)*(Yed-Yst-2)+(j-Yst-1))%64 != my_id)
 				continue;
 			get_reply = 0;
 			athread_get(PE_MODE,&nodes[current][i-Xst+1][j-Yst+1][0][0],&tmp_nodes[0][0],500*19*sizeof(float),&get_reply,0,0,0);
-			athread_get(PE_MODE,&flags[i-Xst+1][j-Yst+1][0],tmp_flags,500*sizeof(int),&get_reply,0,0,0);
-			while(get_reply != 2);
+			while(get_reply != 1);
 
-			// get_reply = 0;
-			// // athread_get(PE_MODE,&nodes[current][i-Xst+1][j-Yst+1][0][0],&tmp_nodes[0][0],500*19*sizeof(float),&get_reply,0,0,0);
-			// athread_get(PE_MODE,&flags[i-Xst+1][j-Yst+1][0],tmp_flags,500*sizeof(int),&get_reply,0,0,0);
-			// while(get_reply != 1);
+			get_mem(&flags[i-Xst+1][j-Yst+1][0], tmp_flags, 500*sizeof(int));
 
-			// shift()
+			shift(i-Xst+1 -1, j-Yst+1 +1, 0);
+			shift(i-Xst+1 +0, j-Yst+1 +1, 1);
+			shift(i-Xst+1 +1, j-Yst+1 +1, 2);
+			shift(i-Xst+1 -1, j-Yst+1 +0, 3);
+			
+			shift(i-Xst+1 +1, j-Yst+1 +0, 5);
+			shift(i-Xst+1 -1, j-Yst+1 -1, 6);
+			shift(i-Xst+1 +0, j-Yst+1 -1, 7);
+			shift(i-Xst+1 +1, j-Yst+1 -1, 8);
 
+			shift(i-Xst+1 +0, j-Yst+1 +0, 4);
+			
 			for(k = 0; k < nz; k++) {
 				if(tmp_flags[k] & (1<<20) || tmp_flags[k] & (1<<19)) {
 					rho = 0.0, u_x = 0.0, u_y = 0.0, u_z = 0.0;

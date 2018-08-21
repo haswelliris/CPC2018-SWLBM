@@ -5,7 +5,6 @@ struct athread_init_parameter
 {
 	float *****nodes;
     int ***flags;
-    int ****walls;
 	int Xst;
 	int Xed;
 	int Yst;

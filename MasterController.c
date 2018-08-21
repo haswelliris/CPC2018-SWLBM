@@ -2,7 +2,7 @@
 #include "Argument.h"
 #include "SlaveController.h"
 
-#define SMALL_STEP 2
+// #define SMALL_STEP 2
 
 extern SLAVE_FUN(slaveController)();
 extern SLAVE_FUN(slaveInit)();
@@ -70,7 +70,6 @@ void masterController(
 	struct athread_init_parameter parameter;
 	parameter.nodes = nodes;
 	parameter.flags = newFalgs;
-	parameter.walls = walls;
 	parameter.Xst = Xst;
 	parameter.Xed = Xed;
 	parameter.Yst = Yst;
@@ -90,12 +89,16 @@ void masterController(
 
 	int s, n = 0;
 
+	hch_timer_init_();
+
 	for (s = 0; s < STEPS; s++) {
 
-		slaveStream(nodes, walls, newFalgs, Xst, Xed, Yst, Yed, Z, current, other);
-		// slaveCollide(nodes, flags, Xst, Xed, Yst, Yed, Z, current);
+		// slaveStream(nodes, walls, newFalgs, Xst, Xed, Yst, Yed, Z, current, other);
+		hch_timer_start(0);
 		athread_spawn(SlaveCollide, &current);
+		hch_timer_stop(0);
 
+		hch_timer_start(1);
         bounce_send_init(X,
 			Y,
 			Z,
@@ -116,7 +119,9 @@ void masterController(
 			temp_lu_send, 
 			temp_rd_send, 
 			temp_ru_send);
+        hch_timer_stop(1);
 
+		hch_timer_start(2);
         bounce_communicate(mycomm, 
 			dims, 
 			coords, 
@@ -142,11 +147,15 @@ void masterController(
 			temp_ld, 
 			temp_ru, 
 			temp_rd);
+        hch_timer_stop(2);
 
+		hch_timer_start(3);
 		for(i = 0; i < count; i++) {
 			MPI_Wait(&req[i], &sta[i]);
 		}
+        hch_timer_stop(3);
 
+		hch_timer_start(4);
         bounce_update(X,
 			Y,
 			Z,
@@ -167,11 +176,19 @@ void masterController(
 			temp_lu, 
 			temp_rd, 
 			temp_ru);
+        hch_timer_stop(4);
 
+		hch_timer_start(5);
 		masterStream(nodes, walls, flags, Xst, Xed, Yst, Yed, Z, current, other);
+        hch_timer_stop(5);
+
+		hch_timer_start(6);
 		masterCollide(nodes, flags, Xst, Xed, Yst, Yed, Z, current);
-		
+        hch_timer_stop(6);
+
+		hch_timer_start(7);
 		athread_join();
+		hch_timer_stop(7);
 
 		other = current;
 		current = (current+1)%2;
@@ -182,5 +199,5 @@ void masterController(
 		}
 	
 	}
-	// athread_join();
+	hch_timer_finalize_();
 }

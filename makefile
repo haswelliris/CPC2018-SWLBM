@@ -5,7 +5,7 @@ LD = mpicc
 
 CFLAGS =  -O3 -host -I/usr/sw-mpp/mpi2/include/ -lm
 
-OBJ = LbmCavity3D.o Parallel.o MasterController.o MasterCollide.o MasterStream.o SlaveController.o SlaveStream.o SlaveCollide.o 
+OBJ = LbmCavity3D.o Parallel.o MasterController.o MasterCollide.o MasterStream.o SlaveController.o SlaveStream.o SlaveCollide.o HchTimer.o
 
 LIB = lib/liblbm.a
 
