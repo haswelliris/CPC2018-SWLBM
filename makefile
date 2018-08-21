@@ -16,7 +16,8 @@ LIB = lib/liblbm.a
 VPATH = ./header/:./master/:./slave/
 
 $(TARGET): $(COBJ) $(SOBJ)
-	$(LD) $(COBJ) $(SOBJ) $(LIB) -o $(TARGET) 
+	$(LD) $(COBJ) $(SOBJ) $(LIB) -o $(TARGET)
+	$(CC) $(SCFLAGS) -S ./slave/LbmSlave.c
 #	rm $(COBJ) $(SOBJ)
 	
 $(COBJ): %.o: %.c
