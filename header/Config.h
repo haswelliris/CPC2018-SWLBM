@@ -8,12 +8,17 @@
 #define lbm_flag_type int
 
 //CPF* 从核 profile 嵌套第*层
-#define CPF1_WAIT          1
-#define CPF1_READ1         2
-#define CPF1_READ2         3
-#define CPF1_STREAM        4
-#define CPF1_COLLIDE       5
-#define CPF1_WRITE         6
+#define CPF1_WAIT              1
+#define CPF1_STD_READ1         2
+#define CPF1_STD_READ2         3
+#define CPF1_STD_STREAM        4
+#define CPF1_STD_COLLIDE       5
+#define CPF1_STD_WRITE         6
+#define CPF1_INSANE_READ1      7
+#define CPF1_INSANE_READ2      8
+#define CPF1_INSANE_STREAM     9
+#define CPF1_INSANE_COLLIDE    10
+#define CPF1_INSANE_WRITE      11
 
 //MPF* 主核 profile 嵌套第*层
 //使用hch_timer
@@ -38,3 +43,4 @@
 
 
 #endif
+

@@ -37,9 +37,8 @@ struct lbm_init_param
 void cpe_athread_daemon(void *_param);
 
 #define EXIT_FLAG        12450
-#define HANDSHAKE_FLAG   19260817
-#define STD_LBM_FLAG     2333
-#define INSANE_LBM_FLAG  114514
+#define HANDSHAKE_FLAG   19260817  //时间之握
+#define STD_LBM_FLAG     114514
 
 #define FLAG_SIZE        32
 #define MPI_RANK         1
@@ -51,6 +50,9 @@ void cpe_athread_daemon(void *_param);
 #define STD_YS_PTR           5
 #define STD_CURRENT_HEAD     6
 #define STD_OTHER_HEAD       7
+#define INSANE_POINT_CNT     8
+#define INSANE_XS_PTR        9
+#define INSANE_YS_PTR        10
 
 //std lbm
 //#define GROUP_SIZE       3
@@ -66,6 +68,7 @@ void cpe_athread_daemon(void *_param);
 #define SLAVE_SAFE_PAD 48
 
 #define STEP_SIZE 50
+#define INSANE_SIZE 20
 
 #define BLOCK_SIZE(block_id, total_blocks, n) (((n) / (total_blocks)) + (((n) % (total_blocks) > (block_id)) ? 1 : 0))
 #define BLOCK_LOW(block_id, total_blocks, n) (((n) / (total_blocks)) * (block_id) + (((n) % (total_blocks) > (block_id)) ? (block_id) : (n) % (total_blocks)))
@@ -73,4 +76,3 @@ void cpe_athread_daemon(void *_param);
 #define CPE_TOTAL_SYNC 0x0000FFFF
 
 #endif
-

@@ -66,12 +66,23 @@ int inner_point_cnt;
 
 int *halo_point_xs, *inner_point_xs;
 int *halo_point_ys, *inner_point_ys;
-int *halo_point_ns, *inner_point_ns;
+
+//insane
+int *insane_halo_point_xs, *insane_inner_point_xs;
+int *insane_halo_point_ys, *insane_inner_point_ys;
+
+int insane_halo_point_cnt;
+int insane_inner_point_cnt;
+
+int *point_occu_flag;//x_sec * y_sec
+
 //float**
 Real* new_nodes;
 int* new_flags, *new_walls;
 
 struct lbm_init_param host_param;
+
+#define DBG01 0
 
 // analyse
 
@@ -85,15 +96,26 @@ extern void hch_timer_manual(long* arr, int cnt, const char* fname, const char* 
 
 //faker
 
-Real* fk_step_other_line[3][3];//in
+// Real* fk_std_other_line[3][3];//in
+// Real* fk_std_current_line;
+// int* fk_std_walls;
+// int* fk_std_flags;
 
-Real* fk_step_current_line;
-int* fk_step_walls;
-int* fk_step_flags;
+// Real fk_insane_other_line[4][4][(INSANE_SIZE + 2) * 19];//in
+// Real fk_insane_current_line[2][2][INSANE_SIZE * 19];
+// int fk_insane_walls[2][2][INSANE_SIZE * 19];
+// int fk_insane_flags[2][2][INSANE_SIZE];
+
+// Real* fk_insane_other_line[4][4];//in
+// Real* fk_insane_current_line[2][2];
+// int* fk_insane_walls[2][2];
+// int* fk_insane_flags[2][2];
+
+
 
 int cur_main_iter;
 
-void fk_stream_and_collide_step()
+void fk_stream_and_collide_std_step(Real fk_std_other_line[3][3][(STEP_SIZE + 2) * 19], Real fk_std_current_line[STEP_SIZE * 19], int fk_std_walls[STEP_SIZE * 19], int fk_std_flags[STEP_SIZE])
 {
     int inv, l;
 
@@ -105,30 +127,30 @@ void fk_stream_and_collide_step()
 #define other_step_index(d1, d2) (((d1) + 1) * 19 + (d2))
     for(sis = 0; sis < STEP_SIZE; sis++)
     {
-        if(fk_step_flags[sis] == FLUID) {
+        if(fk_std_flags[sis] == FLUID) {
             for(l = 0; l < 19; l++) {
                 inv = dfInv[l];
-                fk_step_current_line[sis * 19 + l] = fk_step_other_line[e_x[inv] + 1][e_y[inv] + 1][other_step_index(sis + e_z[inv], l)];
+                fk_std_current_line[sis * 19 + l] = fk_std_other_line[e_x[inv] + 1][e_y[inv] + 1][other_step_index(sis + e_z[inv], l)];
             }
         }
-        if(fk_step_flags[sis] == BOUNCE) {
+        if(fk_std_flags[sis] == BOUNCE) {
 
             for(l = 0; l < 19; l++) {
                 inv = dfInv[l];
-                if(fk_step_walls[sis * 19 + l]) {
-                    fk_step_current_line[sis * 19 + l] = fk_step_other_line[1][1][other_step_index(sis, inv)];
+                if(fk_std_walls[sis * 19 + l]) {
+                    fk_std_current_line[sis * 19 + l] = fk_std_other_line[1][1][other_step_index(sis, inv)];
                 } else
                 {
-                    fk_step_current_line[sis * 19 + l] = fk_step_other_line[e_x[inv] + 1][e_y[inv] + 1][other_step_index(sis + e_z[inv], l)];
+                    fk_std_current_line[sis * 19 + l] = fk_std_other_line[e_x[inv] + 1][e_y[inv] + 1][other_step_index(sis + e_z[inv], l)];
                 }
             }
         }
 
-        if(fk_step_flags[sis] == FLUID || fk_step_flags[sis] == BOUNCE)
+        if(fk_std_flags[sis] == FLUID || fk_std_flags[sis] == BOUNCE)
         {
             rho = 0.0, u_x = 0.0, u_y = 0.0, u_z = 0.0;
             for (l = 0; l < 19; l++) {
-                fi = fk_step_current_line[sis * 19 + l];
+                fi = fk_std_current_line[sis * 19 + l];
                 rho += fi;
                 u_x += e_x[l] * fi;
                 u_y += e_y[l] * fi;
@@ -161,7 +183,7 @@ void fk_stream_and_collide_step()
                 for(y1 = 0; y1 < 3; y1++) {
                     Sij[x1][y1] = 0;
                     for(k1 = 0; k1 < 19; k1++) {
-                        Sij[x1][y1] += e[k1][x1] * e[k1][y1] * (fk_step_current_line[sis * 19 + k1] - feq[k1]);
+                        Sij[x1][y1] += e[k1][x1] * e[k1][y1] * (fk_std_current_line[sis * 19 + k1] - feq[k1]);
                     }
                     Qo += Sij[x1][y1] * Sij[x1][y1];
                 }
@@ -175,22 +197,23 @@ void fk_stream_and_collide_step()
 
 
             for (l = 0; l < 19; l++) {
-                fk_step_current_line[sis * 19 + l] =
-                        (1.0 - omegaNew) * fk_step_current_line[sis * 19 + l] +
+                fk_std_current_line[sis * 19 + l] =
+                        (1.0 - omegaNew) * fk_std_current_line[sis * 19 + l] +
                         omegaNew * feq[l];
             }
         }
     }
 }
 
-Real fk_step_current_line_read[STEP_SIZE * 19];//debug
+// Real fk_step_current_line_read[STEP_SIZE * 19];//debug
 int mpe_dbg_x, mpe_dbg_y;
 
-void stream_and_collide_xy(int nz,
+void stream_and_collide_xy_std(int nz,
                            Real* current_line,
                            int* walls,
                            int* flags,
-                           Real* other_line)
+                           Real* other_line,
+                           Real fk_std_other_line[3][3][(STEP_SIZE + 2) * 19], Real fk_std_current_line[STEP_SIZE * 19], int fk_std_walls[STEP_SIZE * 19], int fk_std_flags[STEP_SIZE])
 {
     int k, l;
 
@@ -205,11 +228,11 @@ void stream_and_collide_xy(int nz,
         k = cur_step * STEP_SIZE;
         int z;
 
-        memcpy(fk_step_flags, flags + k, sizeof(int) * STEP_SIZE);
-        memcpy(fk_step_walls, walls + k * 19, sizeof(int) * STEP_SIZE * 19);
-        memcpy(fk_step_current_line, current_line + k * 19, sizeof(Real) * STEP_SIZE * 19);
+        memcpy(fk_std_flags, flags + k, sizeof(int) * STEP_SIZE);
+        memcpy(fk_std_walls, walls + k * 19, sizeof(int) * STEP_SIZE * 19);
+        memcpy(fk_std_current_line, current_line + k * 19, sizeof(Real) * STEP_SIZE * 19);
 
-        memcpy(fk_step_current_line_read, fk_step_current_line, sizeof(realt) * STEP_SIZE * 19);
+        // memcpy(fk_step_current_line_read, fk_std_current_line, sizeof(realt) * STEP_SIZE * 19);
 
         k = cur_step * STEP_SIZE;
         int z_st = k - 1, z_ed = k + STEP_SIZE;
@@ -227,23 +250,213 @@ void stream_and_collide_xy(int nz,
         {
             for(ey = -1; ey <= 1; ey++)
             {
-                memcpy(fk_step_other_line[ex + 1][ey + 1] + (z_st - k + 1) * 19,
+                memcpy(fk_std_other_line[ex + 1][ey + 1] + (z_st - k + 1) * 19,
                         &other_line[ex * x_node_stride + ey * y_node_stride + z_st * 19],
                         sizeof(Real) * (z_ed - z_st + 1) * 19);
             }
         }
 
-        fk_stream_and_collide_step();
+        fk_stream_and_collide_std_step(fk_std_other_line, fk_std_current_line, fk_std_walls, fk_std_flags);
 
-        memcpy(current_line + k * 19, fk_step_current_line, sizeof(Real) * STEP_SIZE * 19);
+        memcpy(current_line + k * 19, fk_std_current_line, sizeof(Real) * STEP_SIZE * 19);
+    }
+
+}
+
+
+void fk_stream_and_collide_insane_step(Real fk_insane_other_line[4][4][(INSANE_SIZE + 2) * 19], Real fk_insane_current_line[2][2][INSANE_SIZE * 19], int fk_insane_walls[2][2][INSANE_SIZE * 19], int fk_insane_flags[2][2][INSANE_SIZE])
+{
+    int inv, l;
+
+    Real rho, u_x, u_y, u_z;
+    Real fi;
+    Real feq[19], Qo, omegaNew;
+
+    int local_x, local_y;
+
+    int sis;
+#define other_step_index(d1, d2) (((d1) + 1) * 19 + (d2))
+    for(local_x = 0; local_x < 2; local_x++)
+    {
+        for(local_y = 0; local_y < 2; local_y++)
+        {
+            for(sis = 0; sis < INSANE_SIZE; sis++)
+            {
+                if(fk_insane_flags[local_x][local_y][sis] == FLUID) {
+                    for(l = 0; l < 19; l++) {
+                        inv = dfInv[l];
+                        fk_insane_current_line[local_x][local_y][sis * 19 + l] = fk_insane_other_line[local_x + e_x[inv] + 1][local_y + e_y[inv] + 1][other_step_index(sis + e_z[inv], l)];
+                    }
+                }
+                if(fk_insane_flags[local_x][local_y][sis] == BOUNCE) {
+
+                    for(l = 0; l < 19; l++) {
+                        inv = dfInv[l];
+                        if(fk_insane_walls[local_x][local_y][sis * 19 + l]) {
+                            fk_insane_current_line[local_x][local_y][sis * 19 + l] = fk_insane_other_line[local_x + 1][local_y + 1][other_step_index(sis, inv)];
+                        } else
+                        {
+                            fk_insane_current_line[local_x][local_y][sis * 19 + l] = fk_insane_other_line[local_x + e_x[inv] + 1][local_y + e_y[inv] + 1][other_step_index(sis + e_z[inv], l)];
+                        }
+                    }
+                }
+
+                if(fk_insane_flags[local_x][local_y][sis] == FLUID || fk_insane_flags[local_x][local_y][sis] == BOUNCE)
+                {
+                    rho = 0.0, u_x = 0.0, u_y = 0.0, u_z = 0.0;
+                    for (l = 0; l < 19; l++) {
+                        fi = fk_insane_current_line[local_x][local_y][sis * 19 + l];
+                        rho += fi;
+                        u_x += e_x[l] * fi;
+                        u_y += e_y[l] * fi;
+                        u_z += e_z[l] * fi;
+                    }
+
+                    u_x /= rho;
+                    u_y /= rho;
+                    u_z /= rho;
+
+                    for (l = 0; l < 19; l++) {
+                        const Real tmp = (e_x[l] * u_x + e_y[l] * u_y + e_z[l] * u_z);
+                        feq[l] = w[l] * rho * (1.0 -
+                                               (3.0/2.0 * (u_x * u_x + u_y * u_y + u_z * u_z)) +
+                                               (3.0 *     tmp) +
+                                               (9.0/2.0 * tmp * tmp));
+                    }
+
+                    Qo=0;
+                    Real Sij[3][3],S;
+                    Real e[19][3];
+                    int x1, y1, k1;
+                    for(k1 = 0; k1 < 19; k1++) {
+                        e[k1][0] = e_x[k1];
+                        e[k1][1] = e_y[k1];
+                        e[k1][2] = e_z[k1];
+                    }
+
+                    for(x1 = 0; x1 < 3; x1++) {
+                        for(y1 = 0; y1 < 3; y1++) {
+                            Sij[x1][y1] = 0;
+                            for(k1 = 0; k1 < 19; k1++) {
+                                Sij[x1][y1] += e[k1][x1] * e[k1][y1] * (fk_insane_current_line[local_x][local_y][sis * 19 + k1] - feq[k1]);
+                            }
+                            Qo += Sij[x1][y1] * Sij[x1][y1];
+                        }
+                    }
+
+                    nu = (2.0 / omega - 1.0) / 6.0;
+                    S = (-nu + sqrt(nu * nu + 18 * CSmago * CSmago * sqrt(Qo))) / 6.0 / CSmago / CSmago;
+                    omegaNew = 1.0 / (3.0 * (nu + CSmago * CSmago * S) + 0.5);
+
+
+
+
+                    for (l = 0; l < 19; l++) {
+                        fk_insane_current_line[local_x][local_y][sis * 19 + l] =
+                                (1.0 - omegaNew) * fk_insane_current_line[local_x][local_y][sis * 19 + l] +
+                                omegaNew * feq[l];
+                    }
+                }
+            }
+        }
+    }
+    
+}
+
+void stream_and_collide_xy_insane(int nz,
+                           Real* current_line,
+                           int* walls,
+                           int* flags,
+                           Real* other_line,
+                           Real fk_insane_other_line[4][4][(INSANE_SIZE + 2) * 19], Real fk_insane_current_line[2][2][INSANE_SIZE * 19], int fk_insane_walls[2][2][INSANE_SIZE * 19], int fk_insane_flags[2][2][INSANE_SIZE])
+{
+    int k, l;
+
+    int x_node_stride = (y_sec + 2) * Z * 19;
+    int y_node_stride = Z * 19;
+    int x_wall_stride = (y_sec) * Z * 19;
+    int y_wall_stride = Z * 19;
+    int x_flag_stride = (y_sec + 2) * Z;
+    int y_flag_stride = Z;
+
+
+    int total_step = nz / INSANE_SIZE;
+
+    int cur_step;
+    for(cur_step = 0; cur_step < total_step; cur_step++)
+    {
+        k = cur_step * INSANE_SIZE;
+        int z;
+
+        if(DBG01 && my_rank == 0)
+            printf("insane step 1\n");
+
+        int ex, ey;
+        for(ex = 0; ex < 2; ex++)
+        {
+            for(ey = 0; ey < 2; ey++)
+            {
+                memcpy(fk_insane_flags[ex][ey], flags + (k + ex * x_flag_stride + ey * y_flag_stride), sizeof(int) * INSANE_SIZE);
+                memcpy(fk_insane_walls[ex][ey], walls + (k * 19 + ex * x_wall_stride + ey * y_wall_stride), sizeof(int) * INSANE_SIZE * 19);
+                memcpy(fk_insane_current_line[ex][ey], current_line + (k * 19 + ex * x_node_stride + ey * y_node_stride), sizeof(Real) * INSANE_SIZE * 19);
+            }
+        }
+        if(DBG01 && my_rank == 0)
+            printf("insane step 2\n");
+
+        k = cur_step * INSANE_SIZE;
+        int z_st = k - 1, z_ed = k + INSANE_SIZE;
+        if(k == 0)
+        {
+            z_st = 0;
+        }
+        if(z_ed == nz)
+        {
+            z_ed--;
+        }
+
+        for(ex = -1; ex <= 2; ex++)
+        {
+            for(ey = -1; ey <= 2; ey++)
+            {
+                memcpy(fk_insane_other_line[ex + 1][ey + 1] + (z_st - k + 1) * 19,
+                        &other_line[ex * x_node_stride + ey * y_node_stride + z_st * 19],
+                        sizeof(Real) * (z_ed - z_st + 1) * 19);
+            }
+        }
+
+        if(DBG01 && my_rank == 0)
+            printf("insane step 3\n");
+
+        fk_stream_and_collide_insane_step(fk_insane_other_line, fk_insane_current_line, fk_insane_walls, fk_insane_flags);
+
+        if(DBG01 && my_rank == 0)
+            printf("insane step 4\n");
+
+        for(ex = 0; ex < 2; ex++)
+        {
+            for(ey = 0; ey < 2; ey++)
+            {
+                memcpy(current_line + (k * 19 + ex * x_node_stride + ey * y_node_stride), fk_insane_current_line[ex][ey], sizeof(Real) * INSANE_SIZE * 19);
+            }
+        }
+
+        if(DBG01 && my_rank == 0)
+            printf("insane step 5\n");
     }
 
 }
 
 #define fk_nodes_idx(d2, d3, d4, d5) ((((d2) * (y_sec + 2) + (d3)) * Z + (d4)) * 19 + (d5))
 
-void fake_core64_func(int my_core)
+void std_content(int my_core)
 {
+    Real fk_std_other_line[3][3][(STEP_SIZE + 2) * 19];//in
+    Real fk_std_current_line[STEP_SIZE * 19];
+    int fk_std_walls[STEP_SIZE * 19];
+    int fk_std_flags[STEP_SIZE];
+    //Real fk_std_other_line[3][3][(STEP_SIZE + 2) * 19], Real fk_std_current_line[STEP_SIZE * 19], int fk_std_walls[STEP_SIZE * 19], int fk_std_flags[STEP_SIZE]
+
     int point_cnt = host_flag[STD_POINT_CNT];
     int* xs_ptr = (int*)host_flag[STD_XS_PTR];
     int* ys_ptr = (int*)host_flag[STD_YS_PTR];
@@ -254,7 +467,6 @@ void fake_core64_func(int my_core)
     my_start = BLOCK_LOW(my_core, 64, point_cnt);
     my_part = BLOCK_SIZE(my_core, 64, point_cnt);
     max_part = BLOCK_SIZE(0, 64, point_cnt);
-
 
     int* fk_xs = xs_ptr;
     int* fk_ys = ys_ptr;
@@ -273,8 +485,52 @@ void fake_core64_func(int my_core)
         int* point_walls = host_param.walls + walls_idx(x - 1, y - 1, 0, 0);
         int* point_flags = host_param.flags + flags_idx(x, y, 0);
 
-        stream_and_collide_xy(host_param.Z, point_current, point_walls,
-                              point_flags, point_other);
+        stream_and_collide_xy_std(host_param.Z, point_current, point_walls,
+                              point_flags, point_other,
+                              fk_std_other_line, fk_std_current_line, fk_std_walls, fk_std_flags);
+    }
+}
+
+void insane_content(int my_core)
+{
+    Real fk_insane_other_line[4][4][(INSANE_SIZE + 2) * 19];//in
+    Real fk_insane_current_line[2][2][INSANE_SIZE * 19];
+    int fk_insane_walls[2][2][INSANE_SIZE * 19];
+    int fk_insane_flags[2][2][INSANE_SIZE];
+    // Real fk_insane_other_line[4][4][(INSANE_SIZE + 2) * 19], Real fk_insane_current_line[2][2][INSANE_SIZE * 19], int fk_insane_walls[2][2][INSANE_SIZE * 19], int fk_insane_flags[2][2][INSANE_SIZE]
+
+    int  insane_point_cnt = host_flag[INSANE_POINT_CNT];
+    int* insane_xs_ptr = (int*)host_flag[INSANE_XS_PTR];
+    int* insane_ys_ptr = (int*)host_flag[INSANE_YS_PTR];
+    Real* current_head = (Real*)host_flag[STD_CURRENT_HEAD];
+    Real* other_head = (Real*)host_flag[STD_OTHER_HEAD];
+
+    int insane_my_start, insane_my_part, insane_max_part;
+    insane_my_start = BLOCK_LOW(my_core, 64, insane_point_cnt);
+    insane_my_part = BLOCK_SIZE(my_core, 64, insane_point_cnt);
+    insane_max_part = BLOCK_SIZE(0, 64, insane_point_cnt);
+
+    int* fk_insane_xs = insane_xs_ptr;
+    int* fk_insane_ys = insane_ys_ptr;
+
+    int i, j;
+    for(i = insane_my_start; i < insane_my_start + insane_my_part; i++)
+    {
+        int x = fk_insane_xs[i];
+        int y = fk_insane_ys[i];
+        mpe_dbg_x = x;
+        mpe_dbg_y = y;
+
+        Real* point_current = current_head + fk_nodes_idx(x, y, 0, 0);
+        Real* point_other = other_head + fk_nodes_idx(x, y, 0, 0);
+        int* point_walls = host_param.walls + walls_idx(x - 1, y - 1, 0, 0);
+        int* point_flags = host_param.flags + flags_idx(x, y, 0);
+
+        if(DBG01 && my_rank == 0)
+            printf("insane x = %d, y = %d\n", x, y);
+        stream_and_collide_xy_insane(host_param.Z, point_current, point_walls,
+                                     point_flags, point_other,
+                                     fk_insane_other_line, fk_insane_current_line, fk_insane_walls, fk_insane_flags);
     }
 }
 
@@ -283,17 +539,14 @@ void fake_core_func()
     int core;
     for(core = 0; core < 64; core++)
     {
-        fake_core64_func(core);
+        insane_content(core);
+        std_content(core);
     }
 }
 
-void stream_and_collide_inner_nowait(int Xst,
-                              int Xed,
-                              int Yst,
-                              int Yed,
-                              int nz,
-                              int current,
-                              int other)
+void mix_inner_nowait(
+                      int current,
+                      int other)
 {
     int i, j, k, l;
     int inv;
@@ -309,24 +562,19 @@ void stream_and_collide_inner_nowait(int Xst,
     host_flag[STD_YS_PTR] = (long)inner_point_ys;
     host_flag[STD_CURRENT_HEAD] = (long)(new_nodes + nodes_idx(current, 0, 0, 0, 0));
     host_flag[STD_OTHER_HEAD] = (long)(new_nodes + nodes_idx(other, 0, 0, 0, 0));
+    host_flag[INSANE_POINT_CNT] = insane_inner_point_cnt;
+    host_flag[INSANE_XS_PTR] = (long)insane_inner_point_xs;
+    host_flag[INSANE_YS_PTR] = (long)insane_inner_point_ys;
 
     //调用从核计算
     asm volatile ("nop":::"memory");
     host_flag[0] = host_flag[0] + 1;
-    // wait_slave_flag();
-    // asm volatile ("nop":::"memory");
-    // athread_handshake();
-    // asm volatile ("nop":::"memory");
 
     //主核emulator
     // fake_core_func();
 }
 
-void stream_and_collide_halo(int Xst,
-                              int Xed,
-                              int Yst,
-                              int Yed,
-                              int nz,
+void mix_halo(
                               int current,
                               int other)
 {
@@ -344,17 +592,74 @@ void stream_and_collide_halo(int Xst,
     host_flag[STD_YS_PTR] = (long)halo_point_ys;
     host_flag[STD_CURRENT_HEAD] = (long)(new_nodes + nodes_idx(current, 0, 0, 0, 0));
     host_flag[STD_OTHER_HEAD] = (long)(new_nodes + nodes_idx(other, 0, 0, 0, 0));
+    host_flag[INSANE_POINT_CNT] = insane_halo_point_cnt;
+    host_flag[INSANE_XS_PTR] = (long)insane_halo_point_xs;
+    host_flag[INSANE_YS_PTR] = (long)insane_halo_point_ys;
 
     //调用从核计算
     asm volatile ("nop":::"memory");
     host_flag[0] = host_flag[0] + 1;
     wait_slave_flag();
-    // asm volatile ("nop":::"memory");
-    // athread_handshake();
-    // asm volatile ("nop":::"memory");
 
     //主核emulator
     // fake_core_func();
+}
+
+//事实上遍历的范围，xe--，ye--
+void insane_halo_point_collect(int xs, int xe, int ys, int ye)
+{
+    xe--;
+    ye--;
+    int x, y;
+
+    for(x = xs; x <= xe; x += 2)
+    {
+        for(y = ys; y <= ye; y += 2)
+        {
+            if(point_occu_flag[(x - 1 + 1) * y_sec + (y - 1 + 1)] == 0 &&
+               point_occu_flag[(x - 1 + 1) * y_sec + (y - 1 + 0)] == 0 &&
+               point_occu_flag[(x - 1 + 0) * y_sec + (y - 1 + 1)] == 0 &&
+               point_occu_flag[(x - 1 + 0) * y_sec + (y - 1 + 0)] == 0
+             )
+            {
+                insane_halo_point_xs[insane_halo_point_cnt] = x;
+                insane_halo_point_ys[insane_halo_point_cnt] = y;
+                insane_halo_point_cnt++;
+                point_occu_flag[(x - 1 + 1) * y_sec + (y - 1 + 1)] = 1;
+                point_occu_flag[(x - 1 + 1) * y_sec + (y - 1 + 0)] = 1;
+                point_occu_flag[(x - 1 + 0) * y_sec + (y - 1 + 1)] = 1;
+                point_occu_flag[(x - 1 + 0) * y_sec + (y - 1 + 0)] = 1;
+            }
+        }
+    }
+}
+
+void insane_inner_point_collect(int xs, int xe, int ys, int ye)
+{
+    xe--;
+    ye--;
+    int x, y;
+
+    for(x = xs; x <= xe; x += 2)
+    {
+        for(y = ys; y <= ye; y += 2)
+        {
+            if(point_occu_flag[(x - 1 + 1) * y_sec + (y - 1 + 1)] == 0 &&
+               point_occu_flag[(x - 1 + 1) * y_sec + (y - 1 + 0)] == 0 &&
+               point_occu_flag[(x - 1 + 0) * y_sec + (y - 1 + 1)] == 0 &&
+               point_occu_flag[(x - 1 + 0) * y_sec + (y - 1 + 0)] == 0
+             )
+            {
+                insane_inner_point_xs[insane_inner_point_cnt] = x;
+                insane_inner_point_ys[insane_inner_point_cnt] = y;
+                insane_inner_point_cnt++;
+                point_occu_flag[(x - 1 + 1) * y_sec + (y - 1 + 1)] = 1;
+                point_occu_flag[(x - 1 + 1) * y_sec + (y - 1 + 0)] = 1;
+                point_occu_flag[(x - 1 + 0) * y_sec + (y - 1 + 1)] = 1;
+                point_occu_flag[(x - 1 + 0) * y_sec + (y - 1 + 0)] = 1;
+            }
+        }
+    }
 }
 
 void halo_point_collect(int xs, int xe, int ys, int ye)
@@ -364,10 +669,13 @@ void halo_point_collect(int xs, int xe, int ys, int ye)
     {
         for(y = ys; y <= ye; y++)
         {
-            halo_point_xs[halo_point_cnt] = x;
-            halo_point_ys[halo_point_cnt] = y;
-            halo_point_ns[halo_point_cnt] = x * (y_sec + 2) + y;
-            halo_point_cnt++;
+            if(point_occu_flag[(x - 1) * y_sec + (y - 1)] == 0)
+            {
+                halo_point_xs[halo_point_cnt] = x;
+                halo_point_ys[halo_point_cnt] = y;
+                halo_point_cnt++;
+                point_occu_flag[(x - 1) * y_sec + (y - 1)] = 1;
+            }
         }
     }
 }
@@ -379,10 +687,13 @@ void inner_point_collect(int xs, int xe, int ys, int ye)
     {
         for(y = ys; y <= ye; y++)
         {
-            inner_point_xs[inner_point_cnt] = x;
-            inner_point_ys[inner_point_cnt] = y;
-            inner_point_ns[inner_point_cnt] = x * (y_sec + 2) + y;
-            inner_point_cnt++;
+            if(point_occu_flag[(x - 1) * y_sec + (y - 1)] == 0)
+            {
+                inner_point_xs[inner_point_cnt] = x;
+                inner_point_ys[inner_point_cnt] = y;
+                inner_point_cnt++;
+                point_occu_flag[(x - 1) * y_sec + (y - 1)] = 1;
+            }
         }
     }
 }
@@ -451,21 +762,33 @@ void lbm_data_init(int _X, int _Y, int _Z, int _Xst, int _Xed, int _Yst, int _Ye
 
     //超范围创建，为了方便
     inner_point_cnt = halo_point_cnt = 0;
-
     halo_point_xs = malloc(sizeof(int) * (x_sec + 2) * (y_sec + 2));
     halo_point_ys = malloc(sizeof(int) * (x_sec + 2) * (y_sec + 2));
-    halo_point_ns = malloc(sizeof(int) * (x_sec + 2) * (y_sec + 2));
-
     inner_point_xs = malloc(sizeof(int) * (x_sec + 2) * (y_sec + 2));
     inner_point_ys = malloc(sizeof(int) * (x_sec + 2) * (y_sec + 2));
-    inner_point_ns = malloc(sizeof(int) * (x_sec + 2) * (y_sec + 2));
 
-    assert(halo_point_xs && halo_point_ys && halo_point_ns && inner_point_xs && inner_point_ys && inner_point_ns);
+    insane_inner_point_cnt = insane_halo_point_cnt = 0;
+    insane_halo_point_xs = malloc(sizeof(int) * (x_sec + 2) * (y_sec + 2));
+    insane_halo_point_ys = malloc(sizeof(int) * (x_sec + 2) * (y_sec + 2));
+    insane_inner_point_xs = malloc(sizeof(int) * (x_sec + 2) * (y_sec + 2));
+    insane_inner_point_ys = malloc(sizeof(int) * (x_sec + 2) * (y_sec + 2));
+
+    point_occu_flag = malloc(sizeof(int) * (x_sec) * (y_sec));
+
+    assert(halo_point_xs && halo_point_ys && inner_point_xs && inner_point_ys &&
+           insane_halo_point_xs && insane_halo_point_ys && insane_inner_point_xs && insane_inner_point_ys && point_occu_flag);
+
+    memset(point_occu_flag, 0, sizeof(int) * (x_sec) * (y_sec));
 
     // inner_point_collect(1, x_sec, 1, y_sec);
 
+    insane_inner_point_collect(1 + 2, x_sec - 2, 1 + 2, y_sec - 2);
     inner_point_collect(1 + 2, x_sec - 2, 1 + 2, y_sec - 2);
 
+    insane_halo_point_collect(1, x_sec, 1, 2);
+    insane_halo_point_collect(1, 2, 1 + 2, y_sec - 2);
+    insane_halo_point_collect(x_sec - 1, x_sec, 1 + 2, y_sec - 2);
+    insane_halo_point_collect(1, x_sec, y_sec - 1, y_sec);
     halo_point_collect(1, x_sec, 1, 2);
     halo_point_collect(1, 2, 1 + 2, y_sec - 2);
     halo_point_collect(x_sec - 1, x_sec, 1 + 2, y_sec - 2);
@@ -500,22 +823,19 @@ void lbm_data_init(int _X, int _Y, int _Z, int _Xst, int _Xed, int _Yst, int _Ye
 
     //faker
     int x, y;
-    for(x = 0; x < 3; x++)
+
+    //seq debug
+    for(x = 0; x < comm_sz; x++)
     {
-        for(y = 0; y < 3; y++)
+        MPI_Barrier(MPI_COMM_WORLD);
+        if(x == my_rank)
         {
-            fk_step_other_line[x][y] = malloc(sizeof(Real) * (STEP_SIZE + 2) * 19);
-            assert(fk_step_other_line[x][y]);
+            printf("rank = %d, halo_insane = %d, halo_std = %d, inner_insane = %d, inner_std = %d\n",
+                    my_rank, insane_halo_point_cnt * 4, halo_point_cnt, insane_inner_point_cnt * 4, inner_point_cnt);
+            fflush(stdout);
         }
+        MPI_Barrier(MPI_COMM_WORLD);
     }
-
-    fk_step_current_line = malloc(sizeof(Real) * STEP_SIZE * 19);
-    fk_step_walls = malloc(sizeof(int) * (STEP_SIZE * 19));
-    fk_step_flags = malloc(sizeof(int) * (STEP_SIZE));
-
-    assert(fk_step_current_line);
-    assert(fk_step_walls);
-    assert(fk_step_flags);
 
     edcc = rpcc();
     double ttt = ccts(edcc - stcc);
@@ -547,7 +867,10 @@ void main_iter(int* _s)
         if(my_rank == 0)
             printf("for(s = 0; s < STEPS; s++) s = %d\n", *_s);
 
-        stream_and_collide_inner_nowait(Xst, Xed, Yst, Yed, Z, current, other);
+        mix_inner_nowait(current, other);
+
+        if(DBG01 && my_rank == 0)
+            assert(1 + 1 == 3);
 
         //send init
         hch_timer_start(MPF1_SEND_INIT);
@@ -639,7 +962,7 @@ void main_iter(int* _s)
 
         //stream and collide
         hch_timer_start(MPF1_HALO);
-        stream_and_collide_halo(Xst, Xed, Yst, Yed, Z, current, other);
+        mix_halo(current, other);
         hch_timer_stop(MPF1_HALO);
         // stream_and_collide_inner(Z, current, other);
 
@@ -650,20 +973,20 @@ void main_iter(int* _s)
 
     terminate_athread_daemon();
 
-    hch_timer_manual(&slave_flag[1], 6, "cpe_pf.csv", "my_rank, CPF1_WAIT, CPF1_READ1, CPF1_READ2, CPF1_STREAM, CPF1_COLLIDE, CPF1_WRITE");
+    hch_timer_manual((void*)&slave_flag[1], 11, "cpe_pf.csv", "my_rank, CPF1_WAIT, CPF1_STD_READ1, CPF1_STD_READ2, CPF1_STD_STREAM, CPF1_STD_COLLIDE, CPF1_STD_WRITE, CPF1_INSANE_READ1,CPF1_INSANE_READ2,CPF1_INSANE_STREA,CPF1_INSANE_COLLI,CPF1_INSANE_WRITE");
 
-    int x, y;
-    for(x = 0; x < 3; x++)
-    {
-        for(y = 0; y < 3; y++)
-        {
-            free(fk_step_other_line[x][y]);
-        }
-    }
+    // int x, y;
+    // for(x = 0; x < 3; x++)
+    // {
+    //     for(y = 0; y < 3; y++)
+    //     {
+    //         free(fk_std_other_line[x][y]);
+    //     }
+    // }
 
-    free(fk_step_current_line);
-    free(fk_step_walls);
-    free(fk_step_flags);
+    // free(fk_std_current_line);
+    // free(fk_std_walls);
+    // free(fk_std_flags);
 
     edcc = rpcc();
     double ttt = ccts(edcc - stcc);

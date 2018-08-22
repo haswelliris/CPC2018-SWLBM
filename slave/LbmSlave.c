@@ -191,10 +191,6 @@ void async_read_data(void* cpe_data_ptr, void* mpe_data_ptr, int size)
 #define S_PRESSURE 4
 
 //data area
-__thread_local realt s_step_other_line[3][3][(STEP_SIZE + 2) * 19] __attribute__((aligned(32)));//in
-__thread_local realt s_step_current_line[STEP_SIZE * 19] __attribute__((aligned(32)));
-__thread_local int s_step_walls[STEP_SIZE * 19] __attribute__((aligned(32)));
-__thread_local int s_step_flags[STEP_SIZE] __attribute__((aligned(32)));
 __thread_local realt s_w[19] __attribute__((aligned(32))) = {
         (1./18.),(1./18.),(1./18.),(1./18.),(1./18.),(1./18.),
         (1./36.),(1./36.),(1./36.),(1./36.),(1./36.),(1./36.),
@@ -208,77 +204,195 @@ __thread_local realt s_e_T[19][4] __attribute__((aligned(32))) = {
 	{0.,-1.,1.,0.}, {0.,-1.,-1.,0.}, {1.,0.,1.,0.}, {1.,0.,-1.,0.}, {-1.,0.,1.,0.}, {-1.,0.,-1.,0.}, {0.,0.,0.,0.}
 };
 __thread_local int s_dfInv[19] __attribute__((aligned(32))) = {1, 0, 3, 2, 5, 4, 9, 8, 7, 6, 13, 12, 11, 10, 17, 16, 15, 14, 18};
-__thread_local realt  Sij[12] __attribute__((aligned(32)));
-__thread_local realt  feq[20] __attribute__((aligned(32)));
-// __thread_local realt  a_current_line[20] __attribute__((aligned(32)));
 
-void s_stream_step()
+
+void s_stream_insane_step(realt s_insane_other_line[4][4][(INSANE_SIZE + 2) * 19], realt s_insane_current_line[2][2][INSANE_SIZE * 19], int s_insane_walls[2][2][INSANE_SIZE * 19], int s_insane_flags[2][2][INSANE_SIZE])
 {
     int inv, l;
-	int sis;
-    #define other_step_index(d1, d2) (((d1) + 1) * 19 + (d2))
-	//stream
-    for(sis = 0; sis < STEP_SIZE; sis++)
-    {
-		
-		// for(l = 0; l < 19; l++) {
-			// a_current_line[l] = s_step_current_line[sis * 19 + l];
-		// }
-        if(s_step_flags[sis] == S_FLUID) {
-            for(l = 0; l < 19; l++) {
-                inv = s_dfInv[l];
-				// a_current_line[l] = s_step_other_line[s_e_x[inv] + 1][s_e_y[inv] + 1][other_step_index(sis + s_e_z[inv], l)];
-                s_step_current_line[sis * 19 + l] = s_step_other_line[s_e_x[inv] + 1][s_e_y[inv] + 1][other_step_index(sis + s_e_z[inv], l)];
-            }
-        }
-        if(s_step_flags[sis] == S_BOUNCE) {
 
-            for(l = 0; l < 19; l++) {
-                inv = s_dfInv[l];
-                if(s_step_walls[sis * 19 + l]) {
-					// a_current_line[l] = s_step_other_line[1][1][other_step_index(sis, inv)];
-                    s_step_current_line[sis * 19 + l] = s_step_other_line[1][1][other_step_index(sis, inv)];
-                } else 
-                {
-					// a_current_line[l] = s_step_other_line[s_e_x[inv] + 1][s_e_y[inv] + 1][other_step_index(sis + s_e_z[inv], l)];
-                    s_step_current_line[sis * 19 + l] = s_step_other_line[s_e_x[inv] + 1][s_e_y[inv] + 1][other_step_index(sis + s_e_z[inv], l)];
+    int local_x, local_y;
+
+    int sis;
+#define other_step_index(d1, d2) (((d1) + 1) * 19 + (d2))
+    for(local_x = 0; local_x < 2; local_x++)
+    {
+        for(local_y = 0; local_y < 2; local_y++)
+        {
+            for(sis = 0; sis < INSANE_SIZE; sis++)
+            {
+                if(s_insane_flags[local_x][local_y][sis] == S_FLUID) {
+                    for(l = 0; l < 19; l++) {
+                        inv = s_dfInv[l];
+                        s_insane_current_line[local_x][local_y][sis * 19 + l] = s_insane_other_line[local_x + s_e_x[inv] + 1][local_y + s_e_y[inv] + 1][other_step_index(sis + s_e_z[inv], l)];
+                    }
+                }
+                if(s_insane_flags[local_x][local_y][sis] == S_BOUNCE) {
+
+                    for(l = 0; l < 19; l++) {
+                        inv = s_dfInv[l];
+                        if(s_insane_walls[local_x][local_y][sis * 19 + l]) {
+                            s_insane_current_line[local_x][local_y][sis * 19 + l] = s_insane_other_line[local_x + 1][local_y + 1][other_step_index(sis, inv)];
+                        } else
+                        {
+                            s_insane_current_line[local_x][local_y][sis * 19 + l] = s_insane_other_line[local_x + s_e_x[inv] + 1][local_y + s_e_y[inv] + 1][other_step_index(sis + s_e_z[inv], l)];
+                        }
+                    }
                 }
             }
         }
-	}
+    }
 }
 
-//半SIMD化
-void s_collide_step(int st, int ed)
+void s_collide_insane_step(realt s_insane_other_line[4][4][(INSANE_SIZE + 2) * 19], realt s_insane_current_line[2][2][INSANE_SIZE * 19], int s_insane_walls[2][2][INSANE_SIZE * 19], int s_insane_flags[2][2][INSANE_SIZE])
 {
-	realt rho, u_x, u_y, u_z;
+
+    int local_x, local_y;
+
+    int sis, l;
+
+    realt rho, u_x, u_y, u_z;
     realt fi;
-    realt Qo, omegaNew;
-	
-	int sis, l;
-	//coli
-	for(sis = st; sis < ed; sis++)
+    realt feq[19], Qo, omegaNew, Sij[12];
+
+#define other_step_index(d1, d2) (((d1) + 1) * 19 + (d2))
+
+    for(local_x = 0; local_x < 2; local_x++)
     {
-        if(s_step_flags[sis] == S_FLUID || s_step_flags[sis] == S_BOUNCE)
+        for(local_y = 0; local_y < 2; local_y++)
         {
-            //rho = 0.0, u_x = 0.0, u_y = 0.0, u_z = 0.0;
-			floatv4 U = simd_set_floatv4(0., 0., 0., 0.), E;
+            for(sis = 0; sis < INSANE_SIZE; sis++)
+            {
+                if(s_insane_flags[local_x][local_y][sis] == S_FLUID || s_insane_flags[local_x][local_y][sis] == S_BOUNCE)
+                {
+                    floatv4 U = simd_set_floatv4(0., 0., 0., 0.), E;
+                    #pragma unroll[19]
+                    for (l = 0; l < 19; l++) {
+                        // fi = a_current_line[l];
+                        fi = s_insane_current_line[local_x][local_y][sis * 19 + l];
+                        E = simd_set_floatv4(1., s_e_T[l][0], s_e_T[l][1], s_e_T[l][2]);
+                        U = fi * E + U;
+                    }
+                    simd_store(U, &(Sij[0]));
+                    rho = Sij[0], u_x = Sij[1], u_y = Sij[2], u_z = Sij[3];
+
+                    u_x /= rho;
+                    u_y /= rho;
+                    u_z /= rho;
+
+                    for (l = 0; l < 19; l++) {
+                        const realt tmp = (s_e_x[l] * u_x + s_e_y[l] * u_y + s_e_z[l] * u_z);
+                        feq[l] = s_w[l] * rho * (1.0 -
+                                               (3.0/2.0 * (u_x * u_x + u_y * u_y + u_z * u_z)) +
+                                               (3.0 *     tmp) +
+                                               (9.0/2.0 * tmp * tmp));
+                    }
+
+                    realt S;
+                    floatv4 vs1, vs2, vs3, vs4, vs5 ,ve, vk1, vk2, vk3, vk4, vk5;
+                    int x1, y1, k1;
+                    
+                    vs1 = simd_set_floatv4(0., 0., 0., 0.);
+                    vs2 = simd_set_floatv4(0., 0., 0., 0.);
+                    vs3 = simd_set_floatv4(0., 0., 0., 0.);
+                    #pragma unroll[19]
+                    for(k1 = 0; k1 < 19; k1++) {
+                        float tmp = (s_insane_current_line[local_x][local_y][sis * 19 + k1] - feq[k1]);
+                        // float tmp = (a_current_line[k1] - feq[k1]);
+                        simd_load(ve, &(s_e_T[k1][0]));
+                        vk1 = tmp * s_e_T[k1][0];
+                        vk2 = tmp * s_e_T[k1][1];
+                        vk3 = tmp * s_e_T[k1][2];
+                        
+                        vs1 = vk1 * ve + vs1;
+                        vs2 = vk2 * ve + vs2;
+                        vs3 = vk3 * ve + vs3;
+                    }
+                    simd_store(vs1, &(Sij[0]));
+                    simd_store(vs2, &(Sij[4]));
+                    simd_store(vs3, &(Sij[8]));
+
+                    //用simd乘加会丢精度，也不会变快
+                    Qo=0;
+                    #pragma unroll[12]
+                    for(x1 = 0; x1 < 12; ++x1)
+                    {
+                        Qo += Sij[x1] * Sij[x1];
+                    }
+
+                    param.nu = (2.0 / param.omega - 1.0) / 6.0;
+                    S = (-param.nu + sqrt(param.nu * param.nu + 18 * param.CSmago * param.CSmago * sqrt(Qo))) / 6.0 / param.CSmago / param.CSmago;
+                    omegaNew = 1.0 / (3.0 * (param.nu + param.CSmago * param.CSmago * S) + 0.5);
+
+                    
+                    
+                    for (l = 0; l < 19; l++) {
+                        s_insane_current_line[local_x][local_y][sis * 19 + l] =
+                                (1.0 - omegaNew) * s_insane_current_line[local_x][local_y][sis * 19 + l] +
+                                omegaNew * feq[l];
+                    }
+                }
+            }
+        }
+    }
+}
+
+void s_stream_std(realt s_std_other_line[3][3][(STEP_SIZE + 2) * 19], realt s_std_current_line[STEP_SIZE * 19], int s_std_walls[STEP_SIZE * 19], int s_std_flags[STEP_SIZE])
+{
+    int inv, l;
+
+    int sis;
+    #define other_step_index(d1, d2) (((d1) + 1) * 19 + (d2))
+    for(sis = 0; sis < STEP_SIZE; sis++)
+    {
+        if(s_std_flags[sis] == S_FLUID) {
+            for(l = 0; l < 19; l++) {
+                inv = s_dfInv[l];
+                s_std_current_line[sis * 19 + l] = s_std_other_line[s_e_x[inv] + 1][s_e_y[inv] + 1][other_step_index(sis + s_e_z[inv], l)];
+            }
+        }
+        if(s_std_flags[sis] == S_BOUNCE) {
+
+            for(l = 0; l < 19; l++) {
+                inv = s_dfInv[l];
+                if(s_std_walls[sis * 19 + l]) {
+                    s_std_current_line[sis * 19 + l] = s_std_other_line[1][1][other_step_index(sis, inv)];
+                } else 
+                {
+                    s_std_current_line[sis * 19 + l] = s_std_other_line[s_e_x[inv] + 1][s_e_y[inv] + 1][other_step_index(sis + s_e_z[inv], l)];
+                }
+            }
+        }
+    }
+}
+
+void s_collide_std(realt s_std_other_line[3][3][(STEP_SIZE + 2) * 19], realt s_std_current_line[STEP_SIZE * 19], int s_std_walls[STEP_SIZE * 19], int s_std_flags[STEP_SIZE])
+{
+    int l;
+
+    realt rho, u_x, u_y, u_z;
+    realt fi;
+    realt feq[19], Qo, omegaNew, Sij[12];
+
+    int sis;
+    for(sis = 0; sis < STEP_SIZE; sis++)
+    {
+        if(s_std_flags[sis] == S_FLUID || s_std_flags[sis] == S_BOUNCE)
+        {
+            floatv4 U = simd_set_floatv4(0., 0., 0., 0.), E;
             #pragma unroll[19]
             for (l = 0; l < 19; l++) {
-				// fi = a_current_line[l];
-				fi = s_step_current_line[sis * 19 + l];
-				E = simd_set_floatv4(1., s_e_T[l][0], s_e_T[l][1], s_e_T[l][2]);
-				U = fi * E + U;
+                // fi = a_current_line[l];
+                fi = s_std_current_line[sis * 19 + l];
+                E = simd_set_floatv4(1., s_e_T[l][0], s_e_T[l][1], s_e_T[l][2]);
+                U = fi * E + U;
             }
-			simd_store(U, &(Sij[0]));
-			rho = Sij[0], u_x = Sij[1], u_y = Sij[2], u_z = Sij[3];
-			
+            simd_store(U, &(Sij[0]));
+            rho = Sij[0], u_x = Sij[1], u_y = Sij[2], u_z = Sij[3];
+
             u_x /= rho;
             u_y /= rho;
             u_z /= rho;
 
-            //用simd会丢精度, 但是会快(2/100)s/次
-            #pragma unroll[19]
             for (l = 0; l < 19; l++) {
                 const realt tmp = (s_e_x[l] * u_x + s_e_y[l] * u_y + s_e_z[l] * u_z);
                 feq[l] = s_w[l] * rho * (1.0 -
@@ -296,7 +410,7 @@ void s_collide_step(int st, int ed)
 			vs3 = simd_set_floatv4(0., 0., 0., 0.);
             #pragma unroll[19]
 			for(k1 = 0; k1 < 19; k1++) {
-				float tmp = (s_step_current_line[sis * 19 + k1] - feq[k1]);
+				float tmp = (s_std_current_line[sis * 19 + k1] - feq[k1]);
 				// float tmp = (a_current_line[k1] - feq[k1]);
 				simd_load(ve, &(s_e_T[k1][0]));
 				vk1 = tmp * s_e_T[k1][0];
@@ -319,137 +433,106 @@ void s_collide_step(int st, int ed)
 				Qo += Sij[x1] * Sij[x1];
 			}
 
-            // if(my_core == 0 && param.my_id == 5)
-            //     printf("%f\n", Qo);
+
             param.nu = (2.0 / param.omega - 1.0) / 6.0;
             S = (-param.nu + sqrt(param.nu * param.nu + 18 * param.CSmago * param.CSmago * sqrt(Qo))) / 6.0 / param.CSmago / param.CSmago;
             omegaNew = 1.0 / (3.0 * (param.nu + param.CSmago * param.CSmago * S) + 0.5);
-			
-            //没有必要上simd
-            #pragma unroll[19]
+
+
             for (l = 0; l < 19; l++) {
-              s_step_current_line[sis * 19 + l] =
-                      (1.0 - omegaNew) * s_step_current_line[sis * 19 + l] +
-                      omegaNew * feq[l];
+               s_std_current_line[sis * 19 + l] =
+                       (1.0 - omegaNew) * s_std_current_line[sis * 19 + l] +
+                       omegaNew * feq[l];
             }
         }
     }
 }
 
-//TODO !!!!修了一些bug，但是精度丢失还是很严重，变快5s
-__thread_local float Qo4[4] __attribute__((aligned(32)));
-__thread_local float omegaNew4[4] __attribute__((aligned(32)));
-__thread_local float line4[4] __attribute__((aligned(32)));
-__thread_local float u_x4[4] __attribute__((aligned(32)));
-__thread_local float u_y4[4] __attribute__((aligned(32)));
-__thread_local float u_z4[4] __attribute__((aligned(32)));
-__thread_local float rho4[4] __attribute__((aligned(32)));
-__thread_local float tmp4[4] __attribute__((aligned(32)));
-void s_simd_collide_step()
+void stream_and_collide_xy_insane(int nz,
+                           realt* current_line,
+                           int* walls,
+                           int* flags,
+                           realt* other_line,
+                           realt s_insane_other_line[4][4][(INSANE_SIZE + 2) * 19], realt s_insane_current_line[2][2][INSANE_SIZE * 19], int s_insane_walls[2][2][INSANE_SIZE * 19], int s_insane_flags[2][2][INSANE_SIZE])
 {
-	int STEP_SIZE_MAIN = (STEP_SIZE / 4) * 4;
-	
-    floatv4  feqv[19];
-    floatv4  Sijv[9];
-    floatv4  currentv[19];
+    int k, l;
 
-	floatv4 rho, u_x, u_y, u_z;
-	floatv4 fi;
-    floatv4 Qo, omegaNew;
-	int sis, l, ii;
-	for(sis = 0; sis < STEP_SIZE_MAIN; sis+=4)
+    int x_node_stride = (param.y_sec + 2) * param.Z * 19;
+    int y_node_stride = param.Z * 19;
+    int x_wall_stride = (param.y_sec) * param.Z * 19;
+    int y_wall_stride = param.Z * 19;
+    int x_flag_stride = (param.y_sec + 2) * param.Z;
+    int y_flag_stride = param.Z;
+
+
+    int total_step = nz / INSANE_SIZE;
+
+    int cur_step;
+    for(cur_step = 0; cur_step < total_step; cur_step++)
     {
-		//if(s_step_flags[sis] == S_FLUID || s_step_flags[sis] == S_BOUNCE)
+        k = cur_step * INSANE_SIZE;
+        int z;
+
+        stpf();
+        int ex, ey;
+        for(ex = 0; ex < 2; ex++)
         {
-            for (l = 0; l < 19; l++) {
-                for(ii = 0; ii < 4; ++ii)
-                {
-                    if(s_step_flags[sis + ii] == S_FLUID || s_step_flags[sis + ii] == S_BOUNCE)
-				    {
-						line4[ii] = s_step_current_line[(sis + ii) * 19 + l];
-				    }
-                    else
-                    {
-                        line4[ii] = 1.0;
-                    }
-                }
-				simd_load(currentv[l], &(line4[0]));
+            for(ey = 0; ey < 2; ey++)
+            {
+                async_read_data(s_insane_flags[ex][ey], flags + (k + ex * x_flag_stride + ey * y_flag_stride), sizeof(int) * INSANE_SIZE);
+                async_read_data(s_insane_walls[ex][ey], walls + (k * 19 + ex * x_wall_stride + ey * y_wall_stride), sizeof(int) * INSANE_SIZE * 19);
+                async_read_data(s_insane_current_line[ex][ey], current_line + (k * 19 + ex * x_node_stride + ey * y_node_stride), sizeof(realt) * INSANE_SIZE * 19);
             }
-
-            rho = simd_set_floatv4(0., 0., 0., 0.);
-            u_x = simd_set_floatv4(0., 0., 0., 0.);
-            u_y = simd_set_floatv4(0., 0., 0., 0.);
-            u_z = simd_set_floatv4(0., 0., 0., 0.);
-            for (l = 0; l < 19; l++) {
-				fi = currentv[l];
-                rho = rho + fi;
-                u_x = s_e_T[l][0] * fi + u_x;
-                u_y = s_e_T[l][1] * fi + u_y;
-                u_z = s_e_T[l][2] * fi + u_z;
-            }
-
-           	u_x = u_x / rho;
-            u_y = u_y / rho;
-            u_z = u_z / rho;
-
-            for (l = 0; l < 19; l++) {
-                floatv4 tmp = (s_e_T[l][0] * u_x + s_e_T[l][1] * u_y + s_e_T[l][2] * u_z);
-				feqv[l] = s_w[l] * rho * (1.0 -
-					(3.0/2.0 * (u_x * u_x + u_y * u_y + u_z * u_z)) +
-					(3.0 *     tmp) +
-					(9.0/2.0 * tmp * tmp));
-            }
-
-            int x1, y1, k1;
-			for(x1 = 0; x1 < 9; x1++) {
-				Sijv[x1] = simd_set_floatv4(0., 0., 0., 0.);
-			}
-			for(k1 = 0; k1 < 19; k1++) {
-				for(x1 = 0; x1 < 3; x1++) for(y1 = 0; y1 < 3; y1++) {
-                    Sijv[x1 * 3 + y1] = s_e_T[k1][x1] * s_e_T[k1][y1] * (currentv[k1] - feqv[k1]) + Sijv[x1 * 3 + y1];
-				}
-            }
-
-            Qo = simd_set_floatv4(0., 0., 0., 0.);
-			for(x1 = 0; x1 < 9; x1++) {
-				Qo = Sijv[x1] * Sijv[x1] + Qo;
-			}
-			
-            //这个地方。蜜汁无法保持精度
-            // simd_store(Qo, &(Qo4[0]));
-            // float S;
-            // for(ii = 0; ii < 4; ii++)
-            // {
-            //     param.nu = (2.0 / param.omega - 1.0) / 6.0;
-            //     S = (-param.nu + sqrt(param.nu * param.nu + 18 * param.CSmago * param.CSmago * sqrt(Qo4[ii]))) / 6.0 / param.CSmago / param.CSmago;
-            //     omegaNew4[ii] = 1.0 / (3.0 * (param.nu + param.CSmago * param.CSmago * S) + 0.5);
-            // }
-            // simd_load(omegaNew, &(omegaNew4[0]));
-            floatv4 omega = param.omega;
-            floatv4 CSmago = param.CSmago;
-            floatv4 nu = (2.0 / omega - 1.0) / 6.0;
-            floatv4 S;
-            S = (-nu + simd_vsqrts(nu * nu + 18.0 * CSmago * CSmago * simd_vsqrts(Qo))) / 6.0 / CSmago / CSmago;
-			omegaNew = 1.0 / (3.0 * (nu + CSmago * CSmago * S) + 0.5);
-            
-            for (l = 0; l < 19; l++) {
-				currentv[l] = (1.0 - omegaNew) * currentv[l] + omegaNew * feqv[l];
-            }
-			
-			for (l = 0; l < 19; l++) {
-				simd_store(currentv[l], &(line4[0]));
-				for(x1 = 0; x1 < 4; ++x1)
-				{
-					if(s_step_flags[sis + x1] == S_FLUID || s_step_flags[sis + x1] == S_BOUNCE)
-					{
-						s_step_current_line[(sis + x1) * 19 + l] = line4[x1];
-					}
-				}
-			}
         }
-	}
-	
-	s_collide_step(STEP_SIZE_MAIN, STEP_SIZE);
+        edpf(CPF1_INSANE_READ1);
+
+        stpf();
+        k = cur_step * INSANE_SIZE;
+        int z_st = k - 1, z_ed = k + INSANE_SIZE;
+        if(k == 0)
+        {
+            z_st = 0;
+        }
+        if(z_ed == nz)
+        {
+            z_ed--;
+        }
+
+        for(ex = -1; ex <= 2; ex++)
+        {
+            for(ey = -1; ey <= 2; ey++)
+            {
+                async_read_data(s_insane_other_line[ex + 1][ey + 1] + (z_st - k + 1) * 19,
+                        &other_line[ex * x_node_stride + ey * y_node_stride + z_st * 19],
+                        sizeof(realt) * (z_ed - z_st + 1) * 19);
+            }
+        }
+        wait_all_async_get_data();
+        edpf(CPF1_INSANE_READ2);
+
+
+        stpf();
+        s_stream_insane_step(s_insane_other_line, s_insane_current_line, s_insane_walls, s_insane_flags);
+        edpf(CPF1_INSANE_STREAM);
+
+        stpf();
+        s_collide_insane_step(s_insane_other_line, s_insane_current_line, s_insane_walls, s_insane_flags);
+        edpf(CPF1_INSANE_COLLIDE);
+
+
+        stpf();
+        for(ex = 0; ex < 2; ex++)
+        {
+            for(ey = 0; ey < 2; ey++)
+            {
+                async_write_data(current_line + (k * 19 + ex * x_node_stride + ey * y_node_stride), s_insane_current_line[ex][ey], sizeof(realt) * INSANE_SIZE * 19);
+            }
+        }
+        wait_all_async_write_data();
+        edpf(CPF1_INSANE_WRITE);
+
+    }
+
 }
 
 __thread_local int dbg_print_cnt;
@@ -460,7 +543,8 @@ void s_stream_and_collide_xy(int nz,
                            realt* current_line,
                            int* walls,
                            int* flags,
-                           realt* other_line)
+                           realt* other_line,
+                           realt s_std_other_line[3][3][(STEP_SIZE + 2) * 19], realt s_std_current_line[STEP_SIZE * 19], int s_std_walls[STEP_SIZE * 19], int s_std_flags[STEP_SIZE])
 {
     int k, l;
 
@@ -477,14 +561,14 @@ void s_stream_and_collide_xy(int nz,
         int z;
 
         stpf();
-        seq_read_data(s_step_flags, flags + k, sizeof(int) * STEP_SIZE);
-        seq_read_data(s_step_walls, walls + k * 19, sizeof(int) * STEP_SIZE * 19);
-        seq_read_data(s_step_current_line, current_line + k * 19, sizeof(realt) * STEP_SIZE * 19);
-        edpf(CPF1_READ1);
+        async_read_data(s_std_flags, flags + k, sizeof(int) * STEP_SIZE);
+        async_read_data(s_std_walls, walls + k * 19, sizeof(int) * STEP_SIZE * 19);
+        async_read_data(s_std_current_line, current_line + k * 19, sizeof(realt) * STEP_SIZE * 19);
+        edpf(CPF1_STD_READ1);
 
-        // memcpy(s_step_flags, flags + k, sizeof(int) * STEP_SIZE);
-        // memcpy(s_step_walls, walls + k * 19, sizeof(int) * STEP_SIZE * 19);
-        // memcpy(s_step_current_line, current_line + k * 19, sizeof(int) * STEP_SIZE * 19);
+        // memcpy(s_std_flags, flags + k, sizeof(int) * STEP_SIZE);
+        // memcpy(s_std_walls, walls + k * 19, sizeof(int) * STEP_SIZE * 19);
+        // memcpy(s_std_current_line, current_line + k * 19, sizeof(int) * STEP_SIZE * 19);
 
         k = cur_step * STEP_SIZE;
         int z_st = k - 1, z_ed = k + STEP_SIZE;
@@ -503,35 +587,84 @@ void s_stream_and_collide_xy(int nz,
         {
             for(ey = -1; ey <= 1; ey++)
             {
-                seq_read_data(s_step_other_line[ex + 1][ey + 1] + (z_st - k + 1) * 19, 
+                async_read_data(s_std_other_line[ex + 1][ey + 1] + (z_st - k + 1) * 19, 
                        &other_line[ex * x_node_stride + ey * y_node_stride + z_st * 19], 
                        sizeof(realt) * (z_ed - z_st + 1) * 19);
-                // memcpy(s_step_other_line[ex + 1][ey + 1] + (z_st - k + 1) * 19, 
+                // memcpy(s_std_other_line[ex + 1][ey + 1] + (z_st - k + 1) * 19, 
                 //        &other_line[ex * x_node_stride + ey * y_node_stride + z_st * 19], 
                 //        sizeof(realt) * (z_ed - z_st + 1) * 19);
             }
         }
-        edpf(CPF1_READ2);
+        wait_all_async_get_data();
+        edpf(CPF1_STD_READ2);
 
         stpf();
-        s_stream_step();
-        edpf(CPF1_STREAM);
+        s_stream_std(s_std_other_line, s_std_current_line, s_std_walls, s_std_flags);
+        edpf(CPF1_STD_STREAM);
         
         stpf();
-        //s_simd_collide_step();
-        s_collide_step(0, STEP_SIZE);
-        edpf(CPF1_COLLIDE);
+        s_collide_std(s_std_other_line, s_std_current_line, s_std_walls, s_std_flags);
+        edpf(CPF1_STD_COLLIDE);
 
         stpf();
-        seq_write_data(current_line + k * 19, s_step_current_line, sizeof(realt) * STEP_SIZE * 19);
-        edpf(CPF1_WRITE);
-        // memcpy(current_line + k * 19, s_step_current_line, sizeof(realt) * STEP_SIZE * 19);
+        seq_write_data(current_line + k * 19, s_std_current_line, sizeof(realt) * STEP_SIZE * 19);
+        edpf(CPF1_STD_WRITE);
+        // memcpy(current_line + k * 19, s_std_current_line, sizeof(realt) * STEP_SIZE * 19);
     }
 
 }
 
+#define s_nodes_idx(d2, d3, d4, d5) ((((d2) * (param.y_sec + 2) + (d3)) * param.Z + (d4)) * 19 + (d5))
+#define s_flags_idx(d2, d3, d4) (((d2) * (param.y_sec + 2) + (d3)) * param.Z + (d4))
+#define s_walls_idx(d2, d3, d4, d5) ((((d2) * param.y_sec + (d3)) * param.Z + (d4)) * 19 + (d5))
+
+void insane_lbm()
+{
+    realt s_insane_other_line[4][4][(INSANE_SIZE + 2) * 19];//in
+    realt s_insane_current_line[2][2][INSANE_SIZE * 19];
+    int s_insane_walls[2][2][INSANE_SIZE * 19];
+    int s_insane_flags[2][2][INSANE_SIZE];
+    // realt s_insane_other_line[4][4][(INSANE_SIZE + 2) * 19], realt s_insane_current_line[2][2][INSANE_SIZE * 19], int s_insane_walls[2][2][INSANE_SIZE * 19], int s_insane_flags[2][2][INSANE_SIZE]
+
+    int  insane_point_cnt = local_flag[INSANE_POINT_CNT];
+    int* insane_xs_ptr = (int*)local_flag[INSANE_XS_PTR];
+    int* insane_ys_ptr = (int*)local_flag[INSANE_YS_PTR];
+    realt* current_head = (realt*)local_flag[STD_CURRENT_HEAD];
+    realt* other_head = (realt*)local_flag[STD_OTHER_HEAD];
+
+    int insane_my_start, insane_my_part, insane_max_part;
+    insane_my_start = BLOCK_LOW(my_core, 64, insane_point_cnt);
+    insane_my_part = BLOCK_SIZE(my_core, 64, insane_point_cnt);
+    insane_max_part = BLOCK_SIZE(0, 64, insane_point_cnt);
+
+    int* s_insane_xs = insane_xs_ptr;
+    int* s_insane_ys = insane_ys_ptr;
+
+    int i, j;
+    for(i = insane_my_start; i < insane_my_start + insane_my_part; i++)
+    {
+        int x = s_insane_xs[i];//GLD!!!
+        int y = s_insane_ys[i];//GLD!!!
+
+        realt* point_current = current_head + s_nodes_idx(x, y, 0, 0);
+        realt* point_other = other_head + s_nodes_idx(x, y, 0, 0);
+        int* point_walls = param.walls + s_walls_idx(x - 1, y - 1, 0, 0);
+        int* point_flags = param.flags + s_flags_idx(x, y, 0);
+
+        stream_and_collide_xy_insane(param.Z, point_current, point_walls,
+                                     point_flags, point_other,
+                                     s_insane_other_line, s_insane_current_line, s_insane_walls, s_insane_flags);
+    }
+}
+
 void std_lbm()
 {
+    realt s_std_other_line[3][3][(STEP_SIZE + 2) * 19];//in
+    realt s_std_current_line[STEP_SIZE * 19];
+    int s_std_walls[STEP_SIZE * 19];
+    int s_std_flags[STEP_SIZE];
+    //realt s_std_other_line[3][3][(STEP_SIZE + 2) * 19], realt s_std_current_line[STEP_SIZE * 19], int s_std_walls[STEP_SIZE * 19], int s_std_flags[STEP_SIZE]
+
     dbg_print_cnt = 0;
     int point_cnt = local_flag[STD_POINT_CNT];
     int* xs_ptr = (int*)local_flag[STD_XS_PTR];
@@ -544,18 +677,14 @@ void std_lbm()
     my_part = BLOCK_SIZE(my_core, 64, point_cnt);
     max_part = BLOCK_SIZE(0, 64, point_cnt);
 
-    int* fk_xs = xs_ptr;
-    int* fk_ys = ys_ptr;
-
-#define s_nodes_idx(d2, d3, d4, d5) ((((d2) * (param.y_sec + 2) + (d3)) * param.Z + (d4)) * 19 + (d5))
-#define s_flags_idx(d2, d3, d4) (((d2) * (param.y_sec + 2) + (d3)) * param.Z + (d4))
-#define s_walls_idx(d2, d3, d4, d5) ((((d2) * param.y_sec + (d3)) * param.Z + (d4)) * 19 + (d5))
+    int* s_xs = xs_ptr;
+    int* s_ys = ys_ptr;
 
     int i, j;
     for(i = my_start; i < my_start + my_part; i++)
     {
-        int x = fk_xs[i];//GLD!!!
-        int y = fk_ys[i];//GLD!!!
+        int x = s_xs[i];//GLD!!!
+        int y = s_ys[i];//GLD!!!
         dbg_x = x;
         dbg_y = y;
 
@@ -566,17 +695,12 @@ void std_lbm()
         int* point_flags = param.flags + s_flags_idx(x, y, 0);
 
         s_stream_and_collide_xy(param.Z, point_current, point_walls, 
-                              point_flags, point_other);
+                              point_flags, point_other,
+                              s_std_other_line, s_std_current_line, s_std_walls, s_std_flags);
     }
 
-    standard_write_flag(my_core);
+    // standard_write_flag(my_core);//removed!
 }
-
-void insane_lbm()
-{
-
-}
-
 
 void cpe_athread_daemon(void *_param)
 {
@@ -644,6 +768,8 @@ void cpe_athread_daemon(void *_param)
                 fflush(stdout);
             }
             std_lbm();
+            insane_lbm();
+            standard_write_flag(my_core);
         }
         // else if(local_flag[KERNEL_ACTION] == INSANE_LBM_FLAG)
         // {
@@ -658,3 +784,4 @@ void cpe_athread_daemon(void *_param)
         }
     }
 }
+
