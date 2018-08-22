@@ -338,7 +338,6 @@ void s_collide_step(int st, int ed)
 
 //TODO !!!!修了一些bug，但是精度丢失还是很严重，变快5s
 __thread_local float Qo4[4] __attribute__((aligned(32)));
-__thread_local float S4[4] __attribute__((aligned(32)));
 __thread_local float omegaNew4[4] __attribute__((aligned(32)));
 __thread_local float line4[4] __attribute__((aligned(32)));
 __thread_local float u_x4[4] __attribute__((aligned(32)));
@@ -384,25 +383,23 @@ void s_simd_collide_step()
             for (l = 0; l < 19; l++) {
 				fi = currentv[l];
                 rho = rho + fi;
-                u_x = s_e_x[l] * fi + u_x;
-                u_y = s_e_y[l] * fi + u_y;
-                u_z = s_e_z[l] * fi + u_z;
+                u_x = s_e_T[l][0] * fi + u_x;
+                u_y = s_e_T[l][1] * fi + u_y;
+                u_z = s_e_T[l][2] * fi + u_z;
             }
 
            	u_x = u_x / rho;
             u_y = u_y / rho;
             u_z = u_z / rho;
 
-            //扩展成普通计算精度更爆炸了，为什么？
             for (l = 0; l < 19; l++) {
-                floatv4 tmp = (s_e_x[l] * u_x + s_e_y[l] * u_y + s_e_z[l] * u_z);
+                floatv4 tmp = (s_e_T[l][0] * u_x + s_e_T[l][1] * u_y + s_e_T[l][2] * u_z);
 				feqv[l] = s_w[l] * rho * (1.0 -
 					(3.0/2.0 * (u_x * u_x + u_y * u_y + u_z * u_z)) +
 					(3.0 *     tmp) +
 					(9.0/2.0 * tmp * tmp));
             }
 
-            floatv4 S;
             int x1, y1, k1;
 			for(x1 = 0; x1 < 9; x1++) {
 				Sijv[x1] = simd_set_floatv4(0., 0., 0., 0.);
@@ -418,20 +415,22 @@ void s_simd_collide_step()
 				Qo = Sijv[x1] * Sijv[x1] + Qo;
 			}
 			
-            //展开了一下，但是帮助不大
-            simd_store(Qo, &(Qo4[0]));
-            param.nu = (2.0 / param.omega - 1.0) / 6.0;
-            for(ii = 0; ii < 4; ii++)
-            {
-                // if(s_step_flags[sis + ii] == S_FLUID || s_step_flags[sis + ii] == S_BOUNCE)
-				// {
-                //     if(my_core == 0 && param.my_id == 5)
-                //         printf("%f\n", Qo4[ii]);
-                // }
-                S4[ii] = (-param.nu + sqrt(param.nu * param.nu + 18 * param.CSmago * param.CSmago * sqrt(Qo4[ii]))) / 6.0 / param.CSmago / param.CSmago;
-				omegaNew4[ii] = 1.0 / (3.0 * (param.nu + param.CSmago * param.CSmago * S4[ii]) + 0.5);
-            }
-            simd_load(omegaNew, &(omegaNew4[0]));
+            //这个地方。蜜汁无法保持精度
+            // simd_store(Qo, &(Qo4[0]));
+            // float S;
+            // for(ii = 0; ii < 4; ii++)
+            // {
+            //     param.nu = (2.0 / param.omega - 1.0) / 6.0;
+            //     S = (-param.nu + sqrt(param.nu * param.nu + 18 * param.CSmago * param.CSmago * sqrt(Qo4[ii]))) / 6.0 / param.CSmago / param.CSmago;
+            //     omegaNew4[ii] = 1.0 / (3.0 * (param.nu + param.CSmago * param.CSmago * S) + 0.5);
+            // }
+            // simd_load(omegaNew, &(omegaNew4[0]));
+            floatv4 omega = param.omega;
+            floatv4 CSmago = param.CSmago;
+            floatv4 nu = (2.0 / omega - 1.0) / 6.0;
+            floatv4 S;
+            S = (-nu + simd_vsqrts(nu * nu + 18.0 * CSmago * CSmago * simd_vsqrts(Qo))) / 6.0 / CSmago / CSmago;
+			omegaNew = 1.0 / (3.0 * (nu + CSmago * CSmago * S) + 0.5);
             
             for (l = 0; l < 19; l++) {
 				currentv[l] = (1.0 - omegaNew) * currentv[l] + omegaNew * feqv[l];
