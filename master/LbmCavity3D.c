@@ -176,15 +176,13 @@ int main(int argc, char *argv[])
      * ---------------------------------------------------*/
 	TIME_ST();
 
-    hch_timer_init_();
     lbm_data_init(X, Y, Z, Xst, Xed, Yst, Yed, x_sec, y_sec, nodes, flags, walls, STEPS,
                   temp_right,temp_left,temp_down,temp_up,
                   temp_right_send,temp_left_send,temp_down_send,temp_up_send,
                   temp_lu,temp_ld,temp_ru,temp_rd,
                   temp_lu_send,temp_ld_send,temp_ru_send,temp_rd_send);
     main_iter(&s);
-
-    hch_timer_finalize_();
+    
     TIME_ED();
 
 
