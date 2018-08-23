@@ -20,7 +20,7 @@ SlaveController.o: SlaveController.c
 	$(CC) $(CFLAGS) -c $<
 
 run:$(TARGET)
-	bsub -I -b -q q_sw_cpc_2 -cgsp 64 -n 16 -np 4  -share_size 6500 -host_stack 500 -J test ./LbmCavity3D $(USER)
+	bsub -I -b -q q_sw_expr -cgsp 64 -n 16 -np 4  -share_size 6500 -host_stack 500 -J test ./LbmCavity3D $(USER)
 
 #-------------------------------------*
 .PHONY : clean clear

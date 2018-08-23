@@ -89,16 +89,19 @@ void masterController(
 
 	int s, n = 0;
 
-	hch_timer_init_();
+// 	hch_timer_init_();
 
 	for (s = 0; s < STEPS; s++) {
 
-		// slaveStream(nodes, walls, newFalgs, Xst, Xed, Yst, Yed, Z, current, other);
-		hch_timer_start(0);
+		// hch_timer_start(0);
 		athread_spawn(SlaveCollide, &current);
-		hch_timer_stop(0);
+		athread_join();
+		slaveStream(nodes, walls, newFalgs, Xst, Xed, Yst, Yed, Z, current, other);
+		// slaveStream(nodes, walls, newFalgs, Xst, Xed, Yst, Yed, Z, current, other);
+		slaveCollide(nodes, flags, Xst, Xed, Yst, Yed, Z, current);
+		// hch_timer_stop(0);
 
-		hch_timer_start(1);
+		// hch_timer_start(1);
         bounce_send_init(X,
 					  Y,
 					  Z,
@@ -136,19 +139,18 @@ void masterController(
 					temp_rd,
  
 					myrank);
-        hch_timer_stop(1);
+        // hch_timer_stop(1);
 
-		hch_timer_start(2);
+		// hch_timer_start(2);
 		masterStream(nodes, walls, flags, Xst, Xed, Yst, Yed, Z, current, other);
-        hch_timer_stop(2);
+        // hch_timer_stop(2);
 
-		hch_timer_start(3);
+		// hch_timer_start(3);
 		masterCollide(nodes, flags, Xst, Xed, Yst, Yed, Z, current);
-        hch_timer_stop(3);
+        // hch_timer_stop(3);
 
-		hch_timer_start(4);
-		athread_join();
-		hch_timer_stop(4);
+		// hch_timer_start(4);
+		// hch_timer_stop(4);
 
 		other = current;
 		current = (current+1)%2;
@@ -159,5 +161,5 @@ void masterController(
 		}
 	
 	}
-	hch_timer_finalize_();
+	// hch_timer_finalize_();
 }
